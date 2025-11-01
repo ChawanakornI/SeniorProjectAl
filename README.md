@@ -1,4 +1,4 @@
-This is the repository for the code regarding to the senior project.
+## This is the repository for the code regarding to the senior project.
 
 Our 2025 Senior Project focuses on developing an application for doctors that integrates Active Learning to reduce manual labeling workload. 
 By intelligently selecting data for annotation, the system improves efficiency, supports accurate decision-making, and enhances productivity in the medical field.
