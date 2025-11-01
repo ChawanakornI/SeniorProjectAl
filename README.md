@@ -13,17 +13,17 @@
 - **Productivity insights:** track labeling progress and model improvements as the dataset grows.
 
 ## Active Learning Flow (WIP)
-1. Collect unlabeled clinical data.
-2. Model suggests high-value samples for annotation.
-3. Clinicians confirm, correct, or enrich the labels.
-4. Retrain and evaluate to continuously raise model confidence.
+-- Under development --
+
+## UX/UI Design
+-- Under development --
 
 ## Documentation & Planning
 - `Requirements.md` — functional and technical expectations.
 - `Usecase.md` — key user journeys and interaction notes.
 - Roadmap and additional docs will be published as milestones are confirmed.
 
-## Project Team
+## Team Members
 | Name | Student ID |
 | --- | --- |
 | Tonnam Kiewsophon | 6588046 |
