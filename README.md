@@ -3,7 +3,7 @@
 ![Project Status Badge](https://img.shields.io/badge/status-in_development-yellow?style=flat-square)
 
 ## Overview
-- Senior Project 2025 focused on reducing manual labeling workload for medical professionals.
+- Our senior project focused on reducing manual labeling workload for medical professionals.
   ALLCARE applies active learning to surface the most informative unlabeled cases for review.
   The goal is to accelerate accurate decision making while keeping the clinician in full control.
 
@@ -21,7 +21,7 @@
 ## Documentation & Planning
 - `Requirements.md` — functional and technical expectations.
 - `Usecase.md` — key user journeys and interaction notes.
-- Roadmap and additional docs will be published as milestones are confirmed.
+- Roadmap and additional docs will be published as milestones and requirements are confirmed and finalized
 
 ## Team Members
 | Name | Student ID | Contract |
