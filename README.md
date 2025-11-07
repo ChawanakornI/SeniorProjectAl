@@ -24,11 +24,11 @@
 - Roadmap and additional docs will be published as milestones are confirmed.
 
 ## Team Members
-| Name | Student ID |
-| --- | --- |
-| Tonnam Kiewsophon | 6588046 |
-| Nakarin Phoorahong | 6588070 |
-| Chawanakorn Rittirut | 6588084 |
+| Name | Student ID | Contract |
+| --- | --- | --- |
+| Tonnam Kiewsophon | 6588046 | [tonnam.kie@student.mahidol.ac.th ](mailto:tonnam.kie@student.mahidol.ac.th ) |
+| Nakarin Phoorahong | 6588070 | [nakarin.pho@student.mahidol.ac.th](mailto:nakarin.pho@student.mahidol.ac.th) |
+| Chawanakorn Rittirut | 6588084 | [chawanakorn.rit@student.mahidol.ac.th](mailto:chawanakorn.rit@student.mahidol.ac.th) |
 
 ---
 
