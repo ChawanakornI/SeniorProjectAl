@@ -12,7 +12,7 @@
 - **Smarter annotation queue:** active learning ranks data points so experts spend time where it matters most.
 - **Productivity insights:** track labeling progress and model improvements as the dataset grows.
 
-## Active Learning Flow (WIP)
+## Active Learning Flow
 -- Under development --
 
 ## UX/UI Design
