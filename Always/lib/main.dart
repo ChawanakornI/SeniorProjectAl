@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
 
 import 'app_state.dart';
 import 'pages/home_page.dart';
 import 'pages/gp_home_page.dart';
 import 'routes.dart';
+import 'features/case/camera_globals.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    cameras = await availableCameras();
+  } on CameraException catch (e) {
+    debugPrint('Error in fetching the cameras: $e');
+  }
+  
   runApp(const MyApp());
 }
 

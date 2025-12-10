@@ -394,12 +394,13 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     return Container(
       height: 46,
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      child: ListView.builder(
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        itemCount: periods.length,
-        itemBuilder: (context, index) {
-          final period = periods[index];
-          final isSelected = _selectedPeriod == period;
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: periods.asMap().entries.map((entry) {
+            final period = entry.value;
+            final isSelected = _selectedPeriod == period;
           
           return GestureDetector(
             onTap: () {
@@ -448,7 +449,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
               ),
             ),
           );
-        },
+        }).toList(),
+        ),
       ),
     );
   }
@@ -1349,7 +1351,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
               ? const Color(0xFF1976D2).withOpacity(0.3)

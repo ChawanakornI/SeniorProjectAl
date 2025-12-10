@@ -5,16 +5,18 @@ import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../theme/glass.dart';
+import '../features/case/create_case.dart';
 import 'dashboard_page.dart';
 import 'notification_page.dart';
 import 'profile_settings_page.dart';
 import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.showLabeling = true});
+  const HomePage({super.key, this.showLabeling});
 
   /// When false, hides the labeling action so GPs only start new cases.
-  final bool showLabeling;
+  /// If null, it defaults based on AppState user role.
+  final bool? showLabeling;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -32,9 +34,17 @@ class _HomePageState extends State<HomePage> {
   String _searchQuery = '';
   final GlobalKey _caseFilterKey = GlobalKey();
 
+  late bool _shouldShowLabeling;
+
   @override
   void initState() {
     super.initState();
+    // Determine effective showLabeling: prefer widget arg, fallback to AppState role
+    if (widget.showLabeling != null) {
+      _shouldShowLabeling = widget.showLabeling!;
+    } else {
+      _shouldShowLabeling = appState.userRole.toLowerCase() != 'gp';
+    }
     appState.addListener(_onAppStateChanged);
   }
 
@@ -200,14 +210,19 @@ class _HomePageState extends State<HomePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Home',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? Colors.white : Colors.black,
+              Flexible(
+                child: Text(
+                  'Home',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();
@@ -340,42 +355,46 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildActionCards(bool isDark) {
-    final children = <Widget>[
-          Expanded(
-            child: _buildActionCard(
-              icon: Icons.camera_alt,
-              title: 'Start New Case',
-              description: 'Capture patient skin images for diagnosis',
-              buttonText: 'Start New Case',
-              isDark: isDark,
-              onTap: () {
-                HapticFeedback.mediumImpact();
-                setState(() {
-                  _showPatientTypeModal = true;
-                });
-              },
-            ),
-          ),
-      if (widget.showLabeling) ...[
-          const SizedBox(width: 16),
-          Expanded(
-            child: _buildActionCard(
-              icon: Icons.bookmark,
-              title: 'Labeling Case',
-              description: 'Active learning selection for doctor labeling',
-              buttonText: 'Start Labeling Case',
-              isDark: isDark,
-              onTap: () {
-                // Handle labeling case
-              },
-            ),
-          ),
-        ],
-    ];
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Row(children: children),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Row(
+            children: [
+              Expanded(
+                child: _buildActionCard(
+                  icon: Icons.camera_alt,
+                  title: 'Start New Case',
+                  description: 'Capture patient skin images for diagnosis',
+                  buttonText: 'Start New Case',
+                  isDark: isDark,
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    setState(() {
+                      _showPatientTypeModal = true;
+                    });
+                  },
+                ),
+              ),
+              if (_shouldShowLabeling) ...[
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildActionCard(
+                    icon: Icons.bookmark,
+                    title: 'Labeling Case',
+                    description: 'Active learning selection for doctor labeling',
+                    buttonText: 'Start Labeling Case',
+                    isDark: isDark,
+                    onTap: () {
+                      // Handle labeling case
+                    },
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -414,6 +433,8 @@ class _HomePageState extends State<HomePage> {
               fontWeight: FontWeight.bold,
               color: isDark ? Colors.white : Colors.black,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(
@@ -422,6 +443,8 @@ class _HomePageState extends State<HomePage> {
               fontSize: 12,
               color: isDark ? Colors.grey.shade400 : Colors.grey,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -461,8 +484,8 @@ class _HomePageState extends State<HomePage> {
 
   String _getMonthName(int month) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     return months[month - 1];
   }
@@ -570,6 +593,12 @@ class _HomePageState extends State<HomePage> {
     final selectionTextColor = isDark ? Colors.black : const Color(0xFF0B1224);
     final todayFill = isDark ? Colors.white.withOpacity(0.18) : Colors.black.withOpacity(0.05);
     final todayBorder = isDark ? Colors.white.withOpacity(0.7) : Colors.black.withOpacity(0.35);
+    final navLabelSize = () {
+      final width = MediaQuery.of(context).size.width;
+      if (width < 360) return 10.0;
+      if (width < 420) return 11.0;
+      return 12.0;
+    }();
     
     return Container(
       margin: const EdgeInsets.all(20),
@@ -585,16 +614,18 @@ class _HomePageState extends State<HomePage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.chevron_left,
-                            color: _canNavigatePrevious() 
-                                ? (isDark ? Colors.white : Colors.black87)
-                                : (isDark ? Colors.white : Colors.black87).withOpacity(0.3),
-                          ),
-                          onPressed: _canNavigatePrevious() ? () {
+                   Expanded(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.chevron_left,
+                              color: _canNavigatePrevious() 
+                                  ? (isDark ? Colors.white : Colors.black87)
+                                  : (isDark ? Colors.white : Colors.black87).withOpacity(0.3),
+                            ),
+                            onPressed: _canNavigatePrevious() ? () {
                             HapticFeedback.selectionClick();
                             setState(() {
                               if (_isMonthView) {
@@ -629,14 +660,19 @@ class _HomePageState extends State<HomePage> {
                             });
                           } : null,
                         ),
-                        Text(
-                          _isMonthView
-                              ? '${_getMonthName(_currentMonth.month)} ${_currentMonth.year}'
-                              : _getWeekRange(),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.black87,
+                        Expanded(
+                          child: Text(
+                            _isMonthView
+                                ? '${_getMonthName(_currentMonth.month)} ${_currentMonth.year}'
+                                : _getWeekRange(),
+                            style: TextStyle(
+                            fontSize: navLabelSize,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
                           ),
                         ),
                         IconButton(
@@ -681,7 +717,8 @@ class _HomePageState extends State<HomePage> {
                             });
                           } : null,
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(20),
@@ -763,18 +800,16 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 16),
                 // Day headers
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: List.generate(7, (index) {
                     final weekday = index + 1; // 1 = Monday, 7 = Sunday
-                    return SizedBox(
-                      width: 40,
+                    return Expanded(
                       child: Text(
                         _getDayAbbreviation(weekday),
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 11,
                           color: mutedTextColor,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     );
@@ -789,7 +824,6 @@ class _HomePageState extends State<HomePage> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: weekDays.map((date) {
                           final isSelected = _selectedDate != null &&
                               _selectedDate!.year == date.year &&
@@ -800,7 +834,8 @@ class _HomePageState extends State<HomePage> {
                               date.day == today.day;
                           final isCurrentMonthDay = isCurrentMonth(date);
                           
-                          return GestureDetector(
+                          return Expanded(
+                            child: GestureDetector(
                             onTap: () {
                               HapticFeedback.selectionClick();
                               setState(() {
@@ -819,42 +854,44 @@ class _HomePageState extends State<HomePage> {
                                 }
                               });
                             },
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                              child: Container(
-                                width: 40,
-                                height: 40,
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? selectionFill
-                                        : (isToday ? todayFill : Colors.transparent),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: isSelected
-                                        ? Border.all(
-                                            color: selectionBorder,
-                                            width: 1.2,
-                                          )
-                                        : (isToday
-                                            ? Border.all(
-                                                color: todayBorder,
-                                                width: 1.2,
-                                              )
-                                            : null),
-                                  ),
-                                child: Center(
-                                  child: Text(
-                                    '${date.day}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
+                            child: Center(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                                  child: Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
                                       color: isSelected
-                                          ? selectionTextColor
-                                          : (isCurrentMonthDay
-                                              ? baseTextColor
-                                              : mutedTextColor),
+                                          ? selectionFill
+                                          : (isToday ? todayFill : Colors.transparent),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: isSelected
+                                          ? Border.all(
+                                              color: selectionBorder,
+                                              width: 1.2,
+                                            )
+                                          : (isToday
+                                              ? Border.all(
+                                                  color: todayBorder,
+                                                  width: 1.2,
+                                                )
+                                              : null),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '${date.day}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: isSelected
+                                              ? selectionTextColor
+                                              : (isCurrentMonthDay
+                                                  ? baseTextColor
+                                                  : mutedTextColor),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -869,7 +906,6 @@ class _HomePageState extends State<HomePage> {
                 else
                   // Week view - show single row
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: _getCurrentWeekDays().map((date) {
                       final isSelected = _selectedDate != null &&
                           _selectedDate!.year == date.year &&
@@ -879,7 +915,8 @@ class _HomePageState extends State<HomePage> {
                           date.month == today.month &&
                           date.day == today.day;
                       
-                      return GestureDetector(
+                      return Expanded(
+                        child: GestureDetector(
                         onTap: () {
                           HapticFeedback.selectionClick();
                           setState(() {
@@ -891,45 +928,48 @@ class _HomePageState extends State<HomePage> {
                             }
                           });
                         },
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                            child: Container(
-                              width: 40,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? selectionFill
-                                    : (isToday ? todayFill : Colors.transparent),
-                                borderRadius: BorderRadius.circular(8),
-                                border: isSelected
-                                    ? Border.all(
-                                        color: selectionBorder,
-                                        width: 1.2,
-                                      )
-                                    : (isToday
-                                        ? Border.all(
-                                            color: todayBorder,
-                                            width: 1.2,
-                                          )
-                                        : null),
-                              ),
-                              child: Center(
-                                  child: Text(
-                                    '${date.day}',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: isSelected
-                                          ? selectionTextColor
-                                          : baseTextColor,
+                        child: Center(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                              child: Container(
+                                width: 36,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? selectionFill
+                                      : (isToday ? todayFill : Colors.transparent),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: isSelected
+                                      ? Border.all(
+                                          color: selectionBorder,
+                                          width: 1.2,
+                                        )
+                                      : (isToday
+                                          ? Border.all(
+                                              color: todayBorder,
+                                              width: 1.2,
+                                            )
+                                          : null),
+                                ),
+                                child: Center(
+                                    child: Text(
+                                      '${date.day}',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: isSelected
+                                            ? selectionTextColor
+                                            : baseTextColor,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
+                        ),
                       );
                     }).toList(),
                   ),
@@ -950,15 +990,21 @@ class _HomePageState extends State<HomePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Case record',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black,
+              Flexible(
+                child: Text(
+                  'Case record',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              GestureDetector(
+              const SizedBox(width: 8),
+              Flexible(
+                child: GestureDetector(
                 key: _caseFilterKey,
                 onTap: () {
                   HapticFeedback.selectionClick();
@@ -1089,17 +1135,22 @@ class _HomePageState extends State<HomePage> {
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
+                      constraints: const BoxConstraints(maxWidth: 150),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: glassBox(isDark, radius: 12, highlight: true),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            _selectedCaseStatus,
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
+                          Flexible(
+                            child: Text(
+                              _selectedCaseStatus,
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -1109,6 +1160,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
+              ),
               ),
             ],
           ),
@@ -1182,7 +1234,7 @@ class _HomePageState extends State<HomePage> {
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           decoration: glassBox(isDark, radius: 12, highlight: true),
       child: Row(
         children: [
@@ -1213,46 +1265,23 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Text(
-                      (record['id'] as String?) ?? 'N/A',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: statusColor.withOpacity(0.3),
-                          width: 1,
+                    Flexible(
+                      child: Text(
+                        (record['id'] as String?) ?? 'N/A',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black,
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(statusIcon, color: statusColor, size: 12),
-                          const SizedBox(width: 4),
-                          Text(
-                            status,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: statusColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -1406,7 +1435,7 @@ class _HomePageState extends State<HomePage> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected 
               ? const Color(0xFF1976D2).withOpacity(0.3)
@@ -1473,12 +1502,16 @@ class _HomePageState extends State<HomePage> {
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     padding: const EdgeInsets.all(24),
                     decoration: glassBox(isDark, radius: 20, highlight: true),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header with close button
-                        Row(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.8,
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header with close button
+                          Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
@@ -1528,6 +1561,12 @@ class _HomePageState extends State<HomePage> {
                               _showPatientTypeModal = false;
                             });
                             HapticFeedback.mediumImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const NewCaseScreen(),
+                              ),
+                            );
                           },
                         ),
                         const SizedBox(height: 16),
@@ -1542,9 +1581,16 @@ class _HomePageState extends State<HomePage> {
                               _showPatientTypeModal = false;
                             });
                             HapticFeedback.mediumImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const NewCaseScreen(),
+                              ),
+                            );
                           },
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

@@ -105,8 +105,11 @@ class _NotificationPageState extends State<NotificationPage> {
       {'label': 'New cases', 'value': 'new_case'},
       {'label': 'Pending labeling', 'value': 'reminder'},
     ];
-    return Row(
-      children: options.map((opt) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: options.map((opt) {
         final selected = _filter == opt['value'];
         return Padding(
           padding: const EdgeInsets.only(right: 8),
@@ -153,6 +156,7 @@ class _NotificationPageState extends State<NotificationPage> {
           ),
         );
       }).toList(),
+      ),
     );
   }
 
@@ -287,22 +291,27 @@ class _NotificationPageState extends State<NotificationPage> {
                                         Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: color.withOpacity(isDark ? 0.28 : 0.18),
-                                                borderRadius: BorderRadius.circular(20),
-                                                border: Border.all(color: color.withOpacity(0.4), width: 1.1),
-                                              ),
-                                              child: Text(
-                                                item.type == 'reminder' ? 'Pending Labeling' : 'New Case',
-                                                style: TextStyle(
-                                                  color: isDark ? Colors.white : Colors.black87,
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w700,
+                                            Flexible(
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: color.withOpacity(isDark ? 0.28 : 0.18),
+                                                  borderRadius: BorderRadius.circular(20),
+                                                  border: Border.all(color: color.withOpacity(0.4), width: 1.1),
+                                                ),
+                                                child: Text(
+                                                  item.type == 'reminder' ? 'Pending Labeling' : 'New Case',
+                                                  style: TextStyle(
+                                                    color: isDark ? Colors.white : Colors.black87,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
                                               ),
                                             ),
+                                            const SizedBox(width: 8),
                                             Text(
                                               _relativeTime(item.createdAt),
                                               style: TextStyle(
@@ -414,7 +423,7 @@ class _NotificationPageState extends State<NotificationPage> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
               ? const Color(0xFF1976D2).withOpacity(0.3)

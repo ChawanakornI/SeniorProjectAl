@@ -5,14 +5,21 @@ class AppState extends ChangeNotifier {
   bool _isDarkMode = false;
   String _firstName = 'Dr.';
   String _lastName = 'Strange';
+  String _userRole = ''; // 'gp', 'doctor', etc.
 
   String get language => _language;
   bool get isDarkMode => _isDarkMode;
   String get firstName => _firstName;
   String get lastName => _lastName;
+  String get userRole => _userRole;
   String get displayName {
     final parts = [firstName.trim(), lastName.trim()].where((p) => p.isNotEmpty).toList();
     return parts.isEmpty ? 'Doctor' : parts.join(' ');
+  }
+
+  void setUserRole(String role) {
+    _userRole = role;
+    notifyListeners();
   }
 
   void setLanguage(String lang) {

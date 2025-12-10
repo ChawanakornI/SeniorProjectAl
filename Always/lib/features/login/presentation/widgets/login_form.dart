@@ -131,6 +131,7 @@ class _LoginFormState extends State<LoginForm> {
 
     // Route based on role from CSV; integrate with backend auth when available.
     final role = (_roles[username] ?? '').toLowerCase();
+    appState.setUserRole(role);
     final targetRoute = role == 'gp' ? Routes.gpHome : Routes.home;
 
     if (!mounted) return;
