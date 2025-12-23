@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 
 import 'app_state.dart';
@@ -10,10 +12,23 @@ import 'features/case/camera_globals.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  try {
-    cameras = await availableCameras();
-  } on CameraException catch (e) {
-    debugPrint('Error in fetching the cameras: $e');
+  // Camera plugin doesn't support macOS, so handle gracefully
+  if (Platform.isMacOS) {
+    debugPrint('Camera plugin not supported on macOS. Using empty camera list.');
+    cameras = [];
+  } else {
+    try {
+      cameras = await availableCameras();
+    } on MissingPluginException catch (e) {
+      debugPrint('Camera plugin not available: $e');
+      cameras = [];
+    } on CameraException catch (e) {
+      debugPrint('Error in fetching the cameras: $e');
+      cameras = [];
+    } catch (e) {
+      debugPrint('Unexpected error initializing cameras: $e');
+      cameras = [];
+    }
   }
   
   runApp(const MyApp());
@@ -67,7 +82,7 @@ class _MyAppState extends State<MyApp> {
         useMaterial3: true,
       ),
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-      initialRoute: Routes.login,
+      initialRoute: Routes.loading,
       routes: {
         ...Routes.all,
         Routes.home: (_) => const HomePage(),

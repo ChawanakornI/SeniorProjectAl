@@ -2,6 +2,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../app_state.dart';
 import '../theme/glass.dart';
@@ -459,10 +461,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _settingsNavItem(Icons.home, 'Home', 0, isDark),
-                          _settingsNavItem(Icons.dashboard, 'Dashboard', 1, isDark),
-                          _settingsNavItem(Icons.notifications, 'Notification', 2, isDark),
-                          _settingsNavItem(Icons.settings, 'Setting', 3, isDark),
+                          _settingsNavItem('assets/Icons/HomeIcon.svg', 'Home', 0, isDark),
+                          _settingsNavItem('assets/Icons/DashboardIcon.svg', 'Dashboard', 1, isDark),
+                          _settingsNavItem('assets/Icons/NotificationIcon.svg', 'Notification', 2, isDark),
+                          _settingsNavItem('assets/Icons/SettingIcon.svg', 'Setting', 3, isDark),
                         ],
                       ),
                     ),
@@ -476,8 +478,13 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _settingsNavItem(IconData icon, String label, int index, bool isDark) {
+  Widget _settingsNavItem(String svgAsset, String label, int index, bool isDark) {
     final isSelected = _currentBottomNavIndex == index;
+
+    final Color iconColor =
+        isSelected
+            ? (isDark ? const Color(0xFF282828) : const Color(0xFFFEFEFE))
+            : (isDark ? Colors.white : Colors.black87);
 
     return GestureDetector(
       onTap: () {
@@ -496,42 +503,35 @@ class _SettingsPageState extends State<SettingsPage> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 23, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF1976D2).withOpacity(0.3)
+              ? (isDark ? const Color.fromARGB(255, 173, 173, 173) : const Color(0xFF282828))
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: isSelected
-              ? Border.all(
-                  color: const Color(0xFF1976D2),
-                  width: 2.5,
-                )
-              : null,
+          borderRadius: BorderRadius.circular(13),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedScale(
-              scale: isSelected ? 1.1 : 1.0,
+              scale: 1.1,
               duration: const Duration(milliseconds: 200),
-              child: Icon(
-                icon,
-                color: isSelected
-                    ? const Color(0xFF1976D2)
-                    : (isDark ? Colors.white : Colors.black87),
-                size: 24,
+              curve: Curves.easeOutBack,
+              child: SvgPicture.asset(
+                svgAsset,
+                width: 24,
+                height: 24,
+                colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
               ),
             ),
             const SizedBox(height: 4),
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected
-                    ? const Color(0xFF1976D2)
-                    : (isDark ? Colors.white : Colors.black87),
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                height: 1.5,
+                color: iconColor,
               ),
               child: Text(label),
             ),

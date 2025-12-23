@@ -1,9 +1,15 @@
-
+import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_fonts/google_fonts.dart';
+//import 'package:fl_chart/fl_chart.dart';
+
 
 import '../theme/glass.dart';
+import '../features/case/case_service.dart';
+import '../features/case/case_summary_screen.dart';
 import 'home_page.dart';
 import 'notification_page.dart';
 import 'profile_settings_page.dart';
@@ -18,154 +24,352 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> with SingleTickerProviderStateMixin {
+class _DashboardPageState extends State<DashboardPage>
+    with SingleTickerProviderStateMixin {
   int _currentBottomNavIndex = 1;
-  String _selectedPeriod = 'This Week';
+  String _selectedPeriod = 'All Time';
+  bool _isStackedView = false; // Toggle for stacked bar chart
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  // Sample analytics data
-  final Map<String, dynamic> _dashboardData = {
-    'totalCases': 156,
-    'pendingCases': 23,
-    'confirmedCases': 118,
-    'rejectedCases': 15,
-    'totalPatients': 89,
-    'newPatientsThisWeek': 12,
-    'avgResponseTime': '2.4h',
-    'accuracyRate': 94.2,
-    // Weekly case trend (Mon-Sun)
-    'weeklyTrend': [8, 12, 15, 10, 18, 14, 9],
-    // Diagnosis distribution
-    'diagnosisDistribution': {
-      'Malignant Melanoma': 28,
-      'Basal Cell Carcinoma': 35,
-      'Actinic Keratosis': 22,
-      'Benign Lesion': 45,
-      'Other': 26,
-    },
-    // Recent activity
-    'recentActivity': [
-      {'time': '10 min ago', 'action': 'Case C000058 confirmed', 'type': 'confirmed'},
-      {'time': '25 min ago', 'action': 'New case C000059 assigned', 'type': 'new'},
-      {'time': '1h ago', 'action': 'Case C000057 rejected', 'type': 'rejected'},
-      {'time': '2h ago', 'action': 'Case C000056 pending review', 'type': 'pending'},
-    ],
+  // Case data from backend
+  List<CaseRecord> _cases = [];
+  bool _isLoading = false;
+
+  // Accuracy metrics derived from real case outcomes (confirmed vs rejected).
+  Map<String, Map<String, double>> get _accuracyMetrics =>
+      _calculateAccuracyMetrics();
+
+  // Computed stats from fetched cases
+  Map<String, num> get _currentStats {
+    final total = _cases.length;
+    final pending = _cases.where((c) => c.status == 'pending').length;
+    final confirmed = _cases.where((c) => c.status == 'Confirmed').length;
+    final rejected = _cases.where((c) => c.status == 'Rejected').length;
+    final accuracy = total > 0 ? (confirmed / total) * 100 : 0.0;
+    return {
+      'totalCases': total,
+      'pendingCases': pending,
+      'confirmedCases': confirmed,
+      'rejectedCases': rejected,
+      'accuracyRate': accuracy,
+    };
+  }
+
+  // Placeholder for previous stats (would need historical data from backend)
+  Map<String, num> get _previousStats => {
+    'totalCases': 0,
+    'pendingCases': 0,
+    'confirmedCases': 0,
+    'accuracyRate': 0,
   };
-
-  // Period-based trend data (labels and values must align)
-  // Today: AM=6, PM=9 → total 15
-  // This Week: Mon-Sun → total 86
-  // This Month: W1-W4 → total 134
-  // All Time: Jan-Jun → total 503
-  final Map<String, List<int>> _trendSeries = {
-    'Today': [6, 9],
-    'This Week': [8, 12, 15, 10, 18, 14, 9],
-    'This Month': [32, 28, 40, 34],
-    'All Time': [80, 74, 90, 95, 88, 76],
-  };
-
-  final Map<String, List<String>> _trendLabels = {
-    'Today': ['AM', 'PM'],
-    'This Week': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    'This Month': ['W1', 'W2', 'W3', 'W4'],
-    'All Time': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-  };
-
-  // Period-based stats for cards (totalCases = sum of trendSeries)
-  // pendingCases & confirmedCases are proportional subsets
-  final Map<String, Map<String, num>> _periodStats = {
-    'Today': {
-      'totalCases': 15,       // 6+9
-      'pendingCases': 3,
-      'confirmedCases': 10,
-      'accuracyRate': 94.6,
-    },
-    'This Week': {
-      'totalCases': 86,       // 8+12+15+10+18+14+9
-      'pendingCases': 12,
-      'confirmedCases': 65,
-      'accuracyRate': 94.2,
-    },
-    'This Month': {
-      'totalCases': 134,      // 32+28+40+34
-      'pendingCases': 18,
-      'confirmedCases': 102,
-      'accuracyRate': 93.8,
-    },
-    'All Time': {
-      'totalCases': 503,      // 80+74+90+95+88+76
-      'pendingCases': 42,
-      'confirmedCases': 412,
-      'accuracyRate': 92.5,
-    },
-  };
-
-  final Map<String, Map<String, num>> _previousPeriodStats = {
-    // Day-on-day (yesterday)
-    'Today': {
-      'totalCases': 13,
-      'pendingCases': 4,
-      'confirmedCases': 8,
-      'accuracyRate': 93.9,
-    },
-    // Week-on-week (last week)
-    'This Week': {
-      'totalCases': 78,
-      'pendingCases': 14,
-      'confirmedCases': 56,
-      'accuracyRate': 93.5,
-    },
-    // Month-on-month (last month)
-    'This Month': {
-      'totalCases': 120,
-      'pendingCases': 22,
-      'confirmedCases': 88,
-      'accuracyRate': 93.1,
-    },
-    // Year-on-year (last year same period)
-    'All Time': {
-      'totalCases': 460,
-      'pendingCases': 52,
-      'confirmedCases': 370,
-      'accuracyRate': 91.8,
-    },
-  };
-
-  // Accuracy metrics (overall and per diagnosis)
-  final Map<String, Map<String, double>> _accuracyMetrics = {
-    'overall': {'precision': 94.2, 'recall': 92.8, 'f1Score': 93.5},
-    'Malignant Melanoma': {'precision': 96.1, 'recall': 94.5, 'f1Score': 95.3},
-    'Basal Cell Carcinoma': {'precision': 93.8, 'recall': 91.2, 'f1Score': 92.5},
-    'Actinic Keratosis': {'precision': 92.4, 'recall': 90.8, 'f1Score': 91.6},
-    'Benign Lesion': {'precision': 95.2, 'recall': 94.1, 'f1Score': 94.6},
-    'Other': {'precision': 89.5, 'recall': 87.2, 'f1Score': 88.3},
-  };
-
-  Map<String, num> get _currentStats =>
-      _periodStats[_selectedPeriod] ?? _periodStats['This Week']!;
-
-  Map<String, num> get _previousStats =>
-      _previousPeriodStats[_selectedPeriod] ?? _previousPeriodStats['This Week']!;
 
   double _percentChange(String key) {
     final current = _currentStats[key] ?? 0;
     final previous = _previousStats[key] ?? 0;
-    if (previous == 0) return 0;
+    if (previous == 0) return current > 0 ? 100.0 : 0.0;
     return ((current - previous) / previous) * 100;
   }
 
   Map<String, dynamic> get _currentTrendData {
-    final values = _trendSeries[_selectedPeriod] ?? _trendSeries['This Week']!;
-    final labels = _trendLabels[_selectedPeriod] ?? _trendLabels['This Week']!;
-    final total = values.fold<int>(0, (sum, v) => sum + v);
-    final maxValue = values.isNotEmpty ? values.reduce((a, b) => a > b ? a : b) : 1;
-    return {
-      'values': values,
-      'labels': labels,
-      'total': total,
-      'max': maxValue == 0 ? 1 : maxValue,
+    // Filter cases based on selected period
+    final filteredCases = _filterCasesByPeriod(_cases, _selectedPeriod);
+
+    if (_isStackedView) {
+      // For stacked view, we need to group by time periods and then stack by status
+      final groupedData = _groupCasesByTimePeriod(filteredCases, _selectedPeriod);
+
+      if (groupedData.isEmpty) {
+        return {
+          'values': [0, 0, 0],
+          'labels': ['Accept', 'Uncertain', 'Reject'],
+          'colors': [const Color(0xFF22C55E), const Color(0xFFF59E0B), const Color(0xFFEF4444)],
+          'total': 0,
+          'max': 1,
+          'isStacked': true,
+        };
+      }
+
+      // For stacked view, we show one set of stacked bars for the entire period
+      final confirmed = filteredCases.where((c) => c.status == 'Confirmed').length;
+      final uncertain = filteredCases.where((c) => c.status == 'Uncertain').length;
+      final rejected = filteredCases.where((c) => c.status == 'Rejected').length;
+
+      final values = [confirmed, uncertain, rejected];
+      final labels = ['Accept', 'Uncertain', 'Reject'];
+      final colors = [
+        const Color(0xFF22C55E), 
+        const Color(0xFFF59E0B), 
+        const Color(0xFFEF4444), 
+      ];
+      final maxValue = values.reduce((a, b) => a > b ? a : b);
+      final total = confirmed + uncertain + rejected;
+
+      return {
+        'values': values,
+        'labels': labels,
+        'colors': colors,
+        'total': total,
+        'max': maxValue > 0 ? maxValue : 1,
+        'isStacked': true,
+      };
+    } else {
+      // Single bar view: group by time periods
+      final groupedData = _groupCasesByTimePeriod(filteredCases, _selectedPeriod);
+
+      if (groupedData.isEmpty) {
+        return {
+          'values': [0],
+          'labels': ['No Data'],
+          'total': 0,
+          'max': 1,
+          'isStacked': false,
+        };
+      }
+
+      final values = groupedData.values.toList();
+      final labels = groupedData.keys.toList();
+      final maxValue = values.reduce((a, b) => a > b ? a : b);
+      final total = values.reduce((a, b) => a + b);
+
+      return {
+        'values': values,
+        'labels': labels,
+        'total': total,
+        'max': maxValue > 0 ? maxValue : 1,
+        'isStacked': false,
+      };
+    }
+  }
+
+  List<CaseRecord> _filterCasesByPeriod(List<CaseRecord> cases, String period) {
+    final now = DateTime.now();
+    DateTime startDate;
+
+    switch (period) {
+      case 'Today':
+        startDate = DateTime(now.year, now.month, now.day);
+        break;
+      case 'This Week':
+        // Start from Monday of current week
+        final monday = now.subtract(Duration(days: now.weekday - 1));
+        startDate = DateTime(monday.year, monday.month, monday.day);
+        break;
+      case 'This Month':
+        startDate = DateTime(now.year, now.month, 1);
+        break;
+      case 'All Time':
+      default:
+        return cases; // No filtering
+    }
+
+    return cases.where((caseRecord) {
+      if (caseRecord.createdAt == null) return false;
+      try {
+        final caseDate = DateTime.parse(caseRecord.createdAt!);
+        return caseDate.isAfter(startDate) || caseDate.isAtSameMomentAs(startDate);
+      } catch (e) {
+        return false;
+      }
+    }).toList();
+  }
+
+  Map<String, int> _groupCasesByTimePeriod(List<CaseRecord> cases, String period) {
+    final Map<String, int> grouped = {};
+
+    for (final caseRecord in cases) {
+      if (caseRecord.createdAt == null) continue;
+
+      try {
+        final caseDate = DateTime.parse(caseRecord.createdAt!);
+        String key;
+
+        switch (period) {
+          case 'Today':
+            // For today, just one group
+            key = 'Today';
+            break;
+          case 'This Week':
+            // Group by day of week
+            final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            key = weekdays[caseDate.weekday - 1];
+            break;
+          case 'This Month':
+            // Group by week of month
+            final dayOfMonth = caseDate.day;
+            final weekOfMonth = ((dayOfMonth - 1) ~/ 7) + 1;
+            key = 'W$weekOfMonth';
+            break;
+          case 'All Time':
+            // Group by month and year
+            key = '${caseDate.year}-${caseDate.month.toString().padLeft(2, '0')}';
+            break;
+          default:
+            key = 'All';
+        }
+
+        grouped[key] = (grouped[key] ?? 0) + 1;
+      } catch (e) {
+        // Skip invalid dates
+        continue;
+      }
+    }
+
+    // Sort the keys appropriately
+    switch (period) {
+      case 'This Week':
+        final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        final sortedGrouped = <String, int>{};
+        for (final day in weekdays) {
+          if (grouped.containsKey(day)) {
+            sortedGrouped[day] = grouped[day]!;
+          }
+        }
+        return sortedGrouped;
+      case 'This Month':
+        final sortedKeys = grouped.keys.toList()..sort();
+        final sortedGrouped = <String, int>{};
+        for (final key in sortedKeys) {
+          sortedGrouped[key] = grouped[key]!;
+        }
+        return sortedGrouped;
+      case 'All Time':
+        final sortedKeys = grouped.keys.toList()..sort();
+        final sortedGrouped = <String, int>{};
+        for (final key in sortedKeys) {
+          // Convert to readable month format
+          final parts = key.split('-');
+          if (parts.length == 2) {
+            final year = int.parse(parts[0]);
+            final month = int.parse(parts[1]);
+            final monthNames = [
+              'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+            ];
+            final readableKey = '${monthNames[month - 1]} $year';
+            sortedGrouped[readableKey] = grouped[key]!;
+          } else {
+            sortedGrouped[key] = grouped[key]!;
+          }
+        }
+        return sortedGrouped;
+      default:
+        return grouped;
+    }
+  }
+
+  // Diagnosis distribution from predictions
+  Map<String, int> get _diagnosisDistribution {
+    final Map<String, int> distribution = {};
+    for (final c in _cases) {
+      final label = c.topPredictionLabel;
+      distribution[label] = (distribution[label] ?? 0) + 1;
+    }
+    return distribution;
+  }
+
+  Map<String, Map<String, double>> _calculateAccuracyMetrics() {
+    if (_cases.isEmpty) {
+      return {
+        'overall': {'precision': 0, 'recall': 0, 'f1Score': 0},
+      };
+    }
+
+    final Map<String, int> totalByLabel = {};
+    final Map<String, int> confirmedByLabel = {};
+    final Map<String, int> rejectedByLabel = {};
+
+    for (final c in _cases) {
+      final label = c.topPredictionLabel;
+      final status = c.status.toLowerCase();
+
+      totalByLabel[label] = (totalByLabel[label] ?? 0) + 1;
+      if (status == 'confirmed') {
+        confirmedByLabel[label] = (confirmedByLabel[label] ?? 0) + 1;
+      } else if (status == 'rejected') {
+        rejectedByLabel[label] = (rejectedByLabel[label] ?? 0) + 1;
+      }
+    }
+
+    double precision(int tp, int fp) {
+      final denom = tp + fp;
+      if (denom == 0) return 0.0;
+      return (tp / denom) * 100;
+    }
+
+    double recall(int tp, int total) {
+      if (total == 0) return 0.0;
+      return (tp / total) * 100;
+    }
+
+    double f1(double p, double r) {
+      if (p <= 0 || r <= 0) return 0.0;
+      return 2 * p * r / (p + r);
+    }
+
+    final confirmedOverall =
+        confirmedByLabel.values.fold<int>(0, (a, b) => a + b);
+    final rejectedOverall =
+        rejectedByLabel.values.fold<int>(0, (a, b) => a + b);
+
+    final overallPrecision = precision(confirmedOverall, rejectedOverall);
+    final overallRecall = recall(confirmedOverall, _cases.length);
+    final overallF1 = f1(overallPrecision, overallRecall);
+
+    final metrics = <String, Map<String, double>>{
+      'overall': {
+        'precision': overallPrecision,
+        'recall': overallRecall,
+        'f1Score': overallF1,
+      },
     };
+
+    totalByLabel.forEach((label, total) {
+      final tp = confirmedByLabel[label] ?? 0;
+      final fp = rejectedByLabel[label] ?? 0;
+      final p = precision(tp, fp);
+      final r = recall(tp, total);
+      metrics[label] = {
+        'precision': p,
+        'recall': r,
+        'f1Score': f1(p, r),
+      };
+    });
+
+    return metrics;
+  }
+
+  // Recent activity from cases (returns CaseRecords for navigation)
+  List<CaseRecord> get _recentActivityCases {
+    final sorted = List<CaseRecord>.from(_cases);
+    sorted.sort((a, b) {
+      final aTime =
+          a.createdAt != null ? DateTime.tryParse(a.createdAt!) : null;
+      final bTime =
+          b.createdAt != null ? DateTime.tryParse(b.createdAt!) : null;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+    return sorted.take(5).toList();
+  }
+
+  String _getTimeAgo(String? createdAt) {
+    if (createdAt == null) return '';
+    try {
+      final dt = DateTime.parse(createdAt);
+      final diff = DateTime.now().difference(dt);
+      if (diff.inMinutes < 60) {
+        return '${diff.inMinutes}m ago';
+      } else if (diff.inHours < 24) {
+        return '${diff.inHours}h ago';
+      } else {
+        return '${diff.inDays}d ago';
+      }
+    } catch (_) {
+      return '';
+    }
   }
 
   @override
@@ -180,6 +384,28 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       curve: Curves.easeOut,
     );
     _animationController.forward();
+    _loadCases();
+  }
+
+  Future<void> _loadCases() async {
+    if (_isLoading) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final cases = await CaseService().fetchCases();
+      if (mounted) {
+        setState(() {
+          _cases = cases;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      log('Failed to load dashboard cases: $e', name: 'DashboardPage');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -208,17 +434,18 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF050A16) : const Color(0xFFFBFBFB);
-    final gradientColors = isDark
-        ? [
-            const Color(0xFF050A16),
-            const Color(0xFF0B1224),
-            const Color(0xFF0F1E33),
-          ]
-        : [
-            const Color(0xFFFBFBFB),
-            const Color(0xFFE8F4F8),
-            const Color(0xFFF0F5F9),
-          ];
+    final gradientColors =
+        isDark
+            ? [
+              const Color(0xFF050A16),
+              const Color(0xFF0B1224),
+              const Color(0xFF0F1E33),
+            ]
+            : [
+              const Color(0xFFFBFBFB),
+              const Color(0xFFE8F4F8),
+              const Color(0xFFF0F5F9),
+            ];
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -304,8 +531,13 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           context: context,
                           builder: (ctx) {
                             return AlertDialog(
-                              backgroundColor: isDark ? const Color(0xFF0B1628) : Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              backgroundColor:
+                                  isDark
+                                      ? const Color(0xFF0B1628)
+                                      : Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
                               title: Text(
                                 'Download CSV',
                                 style: TextStyle(
@@ -316,7 +548,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                               content: Text(
                                 'Export the current dashboard data as CSV?',
                                 style: TextStyle(
-                                  color: isDark ? Colors.white70 : Colors.black87,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black87,
                                 ),
                               ),
                               actions: [
@@ -345,7 +578,11 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: glassBox(isDark, radius: 12, highlight: true),
+                        decoration: glassBox(
+                          isDark,
+                          radius: 12,
+                          highlight: true,
+                        ),
                         child: Icon(
                           Icons.file_download_outlined,
                           color: isDark ? Colors.white : Colors.black87,
@@ -362,7 +599,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                   HapticFeedback.lightImpact();
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const ProfileSettingsPage()),
+                    MaterialPageRoute(
+                      builder: (context) => const ProfileSettingsPage(),
+                    ),
                   );
                 },
                 child: ClipRRect(
@@ -390,7 +629,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 
   Widget _buildPeriodSelector(bool isDark) {
     final periods = ['Today', 'This Week', 'This Month', 'All Time'];
-    
+
     return Container(
       height: 46,
       margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -398,58 +637,78 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         child: Row(
-          children: periods.asMap().entries.map((entry) {
-            final period = entry.value;
-            final isSelected = _selectedPeriod == period;
-          
-          return GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              setState(() {
-                _selectedPeriod = period;
-              });
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: isSelected
-                    ? LinearGradient(
-                        colors: isDark
-                            ? [const Color(0xFF0EA5E9), const Color(0xFF2563EB)]
-                            : [const Color(0xFF3B82F6), const Color(0xFF1D4ED8)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                color: isSelected
-                    ? null
-                    : (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05)),
-                borderRadius: BorderRadius.circular(26),
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: const Color(0xFF2563EB).withOpacity(0.4),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Text(
-                period,
-                style: TextStyle(
-                  color: isSelected
-                      ? Colors.white
-                      : (isDark ? Colors.white70 : Colors.black54),
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
+          children:
+              periods.asMap().entries.map((entry) {
+                final period = entry.value;
+                final isSelected = _selectedPeriod == period;
+
+                return GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    setState(() {
+                      _selectedPeriod = period;
+                    });
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.only(right: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient:
+                          isSelected
+                              ? LinearGradient(
+                                colors:
+                                    isDark
+                                        ? [
+                                          const Color(0xFF0EA5E9),
+                                          const Color(0xFF2563EB),
+                                        ]
+                                        : [
+                                          const Color(0xFF3B82F6),
+                                          const Color(0xFF1D4ED8),
+                                        ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                              : null,
+                      color:
+                          isSelected
+                              ? null
+                              : (isDark
+                                  ? Colors.white.withOpacity(0.08)
+                                  : Colors.black.withOpacity(0.05)),
+                      borderRadius: BorderRadius.circular(26),
+                      boxShadow:
+                          isSelected
+                              ? [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF2563EB,
+                                  ).withOpacity(0.4),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ]
+                              : null,
+                    ),
+                    child: Text(
+                      period,
+                      style: TextStyle(
+                        color:
+                            isSelected
+                                ? Colors.white
+                                : (isDark ? Colors.white70 : Colors.black54),
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
         ),
       ),
     );
@@ -506,7 +765,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 child: _buildStatCard(
                   icon: Icons.speed_outlined,
                   title: 'Accuracy',
-                  value: '${(_currentStats['accuracyRate'] ?? 0).toStringAsFixed(1)}%',
+                  value:
+                      '${(_currentStats['accuracyRate'] ?? 0).toStringAsFixed(1)}%',
                   change: _percentChange('accuracyRate'),
                   color: const Color(0xFF8B5CF6),
                   isDark: isDark,
@@ -532,7 +792,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     VoidCallback? onTap,
   }) {
     final changePositive = change >= 0;
-    final changeLabel = '${changePositive ? '+' : ''}${change.toStringAsFixed(1)}%';
+    final changeLabel =
+        '${changePositive ? '+' : ''}${change.toStringAsFixed(1)}%';
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
@@ -545,10 +806,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
         );
         return onTap != null
             ? GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: onTap,
-                child: card,
-              )
+              behavior: HitTestBehavior.translucent,
+              onTap: onTap,
+              child: card,
+            )
             : card;
       },
       child: ClipRRect(
@@ -570,27 +831,32 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                         color: color.withOpacity(isDark ? 0.2 : 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(
-                        icon,
-                        color: color,
-                        size: 22,
-                      ),
+                      child: Icon(icon, color: color, size: 22),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: changePositive
-                            ? const Color(0xFF22C55E).withOpacity(0.15)
-                            : const Color(0xFFEF4444).withOpacity(0.15),
+                        color:
+                            changePositive
+                                ? const Color(0xFF22C55E).withOpacity(0.15)
+                                : const Color(0xFFEF4444).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            changePositive ? Icons.trending_up : Icons.trending_down,
+                            changePositive
+                                ? Icons.trending_up
+                                : Icons.trending_down,
                             size: 14,
-                            color: changePositive ? const Color(0xFF22C55E) : const Color(0xFFEF4444),
+                            color:
+                                changePositive
+                                    ? const Color(0xFF22C55E)
+                                    : const Color(0xFFEF4444),
                           ),
                           const SizedBox(width: 2),
                           Text(
@@ -598,7 +864,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: changePositive ? const Color(0xFF22C55E) : const Color(0xFFEF4444),
+                              color:
+                                  changePositive
+                                      ? const Color(0xFF22C55E)
+                                      : const Color(0xFFEF4444),
                             ),
                           ),
                         ],
@@ -639,6 +908,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     final labels = trend['labels'] as List<String>;
     final maxValue = trend['max'] as int;
     final total = trend['total'] as int;
+    final isStacked = trend['isStacked'] as bool;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -663,34 +933,44 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                         color: isDark ? Colors.white : Colors.black87,
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isDark 
-                            ? Colors.white.withOpacity(0.1) 
-                            : Colors.black.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3B82F6),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Cases',
-                            style: TextStyle(
-                              fontSize: 12,
+                    // Toggle button for stacked view
+                    GestureDetector(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        setState(() {
+                          _isStackedView = !_isStackedView;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              isDark
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.black.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isStacked ? Icons.bar_chart : Icons.stacked_bar_chart,
+                              size: 16,
                               color: isDark ? Colors.white70 : Colors.black54,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Text(
+                              isStacked ? 'Stacked' : 'Total',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.white70 : Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     Row(
@@ -704,16 +984,21 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                         ),
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? Colors.white.withOpacity(0.08)
-                                : Colors.black.withOpacity(0.05),
+                            color:
+                                isDark
+                                    ? Colors.white.withOpacity(0.08)
+                                    : Colors.black.withOpacity(0.05),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.08)
-                                  : Colors.black.withOpacity(0.06),
+                              color:
+                                  isDark
+                                      ? Colors.white.withOpacity(0.08)
+                                      : Colors.black.withOpacity(0.06),
                               width: 1,
                             ),
                           ),
@@ -737,8 +1022,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: List.generate(values.length, (index) {
                       final value = values[index];
-                      final heightPercent = maxValue == 0 ? 0.0 : value / maxValue;
-                      
+                      final heightPercent =
+                          maxValue == 0 ? 0.0 : value / maxValue;
+
                       return Expanded(
                         child: TweenAnimationBuilder<double>(
                           tween: Tween(begin: 0.0, end: heightPercent),
@@ -753,7 +1039,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white70 : Colors.black54,
+                                    color:
+                                        isDark
+                                            ? Colors.white70
+                                            : Colors.black54,
                                   ),
                                 ),
                                 const SizedBox(height: 6),
@@ -761,18 +1050,29 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                   width: 28,
                                   height: 110 * animation,
                                   decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        const Color(0xFF3B82F6),
-                                        const Color(0xFF0EA5E9),
-                                      ],
-                                      begin: Alignment.bottomCenter,
-                                      end: Alignment.topCenter,
-                                    ),
+                                    gradient: isStacked
+                                        ? LinearGradient(
+                                          colors: [
+                                            (trend['colors'] as List<Color>)[index],
+                                            (trend['colors'] as List<Color>)[index].withOpacity(0.7),
+                                          ],
+                                          begin: Alignment.bottomCenter,
+                                          end: Alignment.topCenter,
+                                        )
+                                        : LinearGradient(
+                                          colors: [
+                                            const Color(0xFF3B82F6),
+                                            const Color(0xFF0EA5E9),
+                                          ],
+                                          begin: Alignment.bottomCenter,
+                                          end: Alignment.topCenter,
+                                        ),
                                     borderRadius: BorderRadius.circular(8),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF3B82F6).withOpacity(0.3),
+                                        color: (isStacked
+                                            ? (trend['colors'] as List<Color>)[index]
+                                            : const Color(0xFF3B82F6)).withOpacity(0.3),
                                         blurRadius: 8,
                                         offset: const Offset(0, 4),
                                       ),
@@ -784,7 +1084,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                   labels[index],
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                    color:
+                                        isDark
+                                            ? Colors.grey.shade400
+                                            : Colors.grey.shade600,
                                   ),
                                 ),
                               ],
@@ -804,18 +1107,15 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   }
 
   Widget _buildDiagnosisDistribution(bool isDark) {
-    final distribution = _dashboardData['diagnosisDistribution'] as Map<String, int>;
-    final total = distribution.values.reduce((a, b) => a + b);
-    final colors = [
-      const Color(0xFFEF4444), // Red - Malignant
-      const Color(0xFFF59E0B), // Orange - Basal Cell
-      const Color(0xFF8B5CF6), // Purple - Actinic
-      const Color(0xFF22C55E), // Green - Benign
-      const Color(0xFF6B7280), // Gray - Other
-    ];
-    
+    final distribution = _diagnosisDistribution;
+    if (distribution.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final maxCount = distribution.values.reduce((a, b) => a > b ? a : b);
+
     return Container(
-      margin: const EdgeInsets.all(20),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: BackdropFilter(
@@ -824,10 +1124,11 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
             padding: const EdgeInsets.all(20),
             decoration: glassBox(isDark, radius: 20, highlight: true),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
                   'Diagnosis Distribution',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -835,94 +1136,63 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                   ),
                 ),
                 const SizedBox(height: 20),
-                // Distribution bars
-                ...distribution.entries.toList().asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final diagnosis = entry.value.key;
-                  final count = entry.value.value;
-                  final percentage = (count / total * 100).toStringAsFixed(1);
-                  final color = colors[index % colors.length];
-                  
-                  return TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: count / total),
-                    duration: Duration(milliseconds: 800 + (index * 150)),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, animation, _) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: BoxDecoration(
-                                        color: color,
-                                        borderRadius: BorderRadius.circular(3),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      diagnosis,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: isDark ? Colors.white : Colors.black87,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                Center(
+                  child: SizedBox(
+                    height: 200,
+                    child: SingleChildScrollView(
+                      child: DataTable(
+                        columns: [
+                          DataColumn(
+                            label: Text(
+                              'Diagnosis',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              'Cases',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ],
+                        rows: (distribution.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).map((entry) {
+                          final isMax = entry.value == maxCount;
+                          return DataRow(
+                            color: isMax
+                                ? MaterialStateProperty.all(Colors.red.withOpacity(0.1))
+                                : null,
+                            cells: [
+                              DataCell(
                                 Text(
-                                  '$count ($percentage%)',
+                                  entry.key,
                                   style: TextStyle(
-                                    fontSize: 13,
-                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              height: 8,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: isDark 
-                                    ? Colors.white.withOpacity(0.1) 
-                                    : Colors.black.withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: FractionallySizedBox(
-                                alignment: Alignment.centerLeft,
-                                widthFactor: animation,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [color, color.withOpacity(0.7)],
-                                    ),
-                                    borderRadius: BorderRadius.circular(4),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: color.withOpacity(0.4),
-                                        blurRadius: 6,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
+                                    color: isDark ? Colors.white : Colors.black87,
+                                    fontWeight: isMax ? FontWeight.bold : FontWeight.normal,
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                }),
+                              DataCell(
+                                Text(
+                                  entry.value.toString(),
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black87,
+                                    fontWeight: isMax ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -932,8 +1202,12 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   }
 
   Widget _buildRecentActivity(bool isDark) {
-    final activities = _dashboardData['recentActivity'] as List<Map<String, String>>;
-    
+    final activities = _recentActivityCases;
+
+    if (activities.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       child: ClipRRect(
@@ -960,7 +1234,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                     GestureDetector(
                       onTap: () {
                         HapticFeedback.lightImpact();
-                        // View all activity
+                        _navigateTo(const NotificationPage());
                       },
                       child: Text(
                         'View all',
@@ -976,9 +1250,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 const SizedBox(height: 16),
                 ...activities.asMap().entries.map((entry) {
                   final index = entry.key;
-                  final activity = entry.value;
-                  final type = activity['type']!;
-                  
+                  final caseRecord = entry.value;
+                  final type = caseRecord.status.toLowerCase();
+
                   Color typeColor;
                   IconData typeIcon;
                   switch (type) {
@@ -998,7 +1272,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                       typeColor = const Color(0xFF3B82F6);
                       typeIcon = Icons.add_circle;
                   }
-                  
+
                   return TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0.0, end: 1.0),
                     duration: Duration(milliseconds: 500 + (index * 100)),
@@ -1006,70 +1280,97 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                     builder: (context, animation, child) {
                       return Transform.translate(
                         offset: Offset(20 * (1 - animation), 0),
-                        child: Opacity(
-                          opacity: animation,
-                          child: child,
-                        ),
+                        child: Opacity(opacity: animation, child: child),
                       );
                     },
-                    child: Container(
-                      margin: EdgeInsets.only(bottom: index < activities.length - 1 ? 12 : 0),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: isDark 
-                            ? Colors.white.withOpacity(0.05) 
-                            : Colors.black.withOpacity(0.03),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: isDark 
-                              ? Colors.white.withOpacity(0.08) 
-                              : Colors.black.withOpacity(0.05),
+                    child: GestureDetector(
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (context) => CaseSummaryScreen(
+                                  caseId: caseRecord.caseId,
+                                  gender: caseRecord.gender ?? 'Unknown',
+                                  age: caseRecord.age?.toString() ?? 'Unknown',
+                                  location: caseRecord.location ?? 'Unknown',
+                                  symptoms: caseRecord.symptoms,
+                                  imagePaths: caseRecord.imagePaths,
+                                  predictions: caseRecord.predictions,
+                                  isPrePrediction: false,
+                                ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        margin: EdgeInsets.only(
+                          bottom: index < activities.length - 1 ? 12 : 0,
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: typeColor.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(12),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color:
+                              isDark
+                                  ? Colors.white.withOpacity(0.05)
+                                  : Colors.black.withOpacity(0.03),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color:
+                                isDark
+                                    ? Colors.white.withOpacity(0.08)
+                                    : Colors.black.withOpacity(0.05),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: typeColor.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(typeIcon, color: typeColor, size: 20),
                             ),
-                            child: Icon(
-                              typeIcon,
-                              color: typeColor,
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Case ${caseRecord.caseId} ${caseRecord.status.toLowerCase()}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color:
+                                          isDark
+                                              ? Colors.white
+                                              : Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _getTimeAgo(caseRecord.createdAt),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color:
+                                          isDark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              color:
+                                  isDark
+                                      ? Colors.grey.shade500
+                                      : Colors.grey.shade400,
                               size: 20,
                             ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  activity['action']!,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white : Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  activity['time']!,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(
-                            Icons.chevron_right,
-                            color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-                            size: 20,
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   );
@@ -1084,8 +1385,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 
   Future<void> _showAccuracyMetricsModal(bool isDark) async {
     final metrics = _accuracyMetrics;
-    final overall = metrics['overall'] ?? {'precision': 0.0, 'recall': 0.0, 'f1Score': 0.0};
-    final diagnosisEntries = metrics.entries.where((e) => e.key != 'overall').toList();
+    final overall =
+        metrics['overall'] ?? {'precision': 0.0, 'recall': 0.0, 'f1Score': 0.0};
+    final diagnosisEntries =
+        metrics.entries.where((e) => e.key != 'overall').toList();
     final diagColors = [
       const Color(0xFFEF4444),
       const Color(0xFFF59E0B),
@@ -1094,9 +1397,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       const Color(0xFF6B7280),
     ];
 
-    double _clampPct(double v) => v.clamp(0.0, 100.0);
+    double clampPct(double v) => v.clamp(0.0, 100.0);
 
-    Widget _metricCircle(String label, double value, Color color) {
+    Widget metricCircle(String label, double value, Color color) {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1107,7 +1410,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 width: 64,
                 height: 64,
                 child: CircularProgressIndicator(
-                  value: (_clampPct(value)) / 100,
+                  value: (clampPct(value)) / 100,
                   strokeWidth: 7,
                   backgroundColor: (isDark ? Colors.white24 : Colors.black12),
                   valueColor: AlwaysStoppedAnimation<Color>(color),
@@ -1136,8 +1439,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       );
     }
 
-    Widget _metricBar(String label, double value, Color color) {
-      final pct = (_clampPct(value)) / 100;
+    Widget metricBar(String label, double value, Color color) {
+      final pct = (clampPct(value)) / 100;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1182,7 +1485,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
+          ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: BackdropFilter(
@@ -1234,9 +1540,21 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _metricCircle('Precision', (overall['precision'] ?? 0), const Color(0xFF3B82F6)),
-                          _metricCircle('Recall', (overall['recall'] ?? 0), const Color(0xFFF59E0B)),
-                          _metricCircle('F1-Score', (overall['f1Score'] ?? 0), const Color(0xFF22C55E)),
+                          metricCircle(
+                            'Precision',
+                            (overall['precision'] ?? 0),
+                            const Color(0xFF3B82F6),
+                          ),
+                          metricCircle(
+                            'Recall',
+                            (overall['recall'] ?? 0),
+                            const Color(0xFFF59E0B),
+                          ),
+                          metricCircle(
+                            'F1-Score',
+                            (overall['f1Score'] ?? 0),
+                            const Color(0xFF22C55E),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 18),
@@ -1258,10 +1576,16 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
+                            color:
+                                isDark
+                                    ? Colors.white.withOpacity(0.04)
+                                    : Colors.black.withOpacity(0.03),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+                              color:
+                                  isDark
+                                      ? Colors.white.withOpacity(0.08)
+                                      : Colors.black.withOpacity(0.05),
                             ),
                           ),
                           child: Column(
@@ -1276,11 +1600,23 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              _metricBar('Precision', (data['precision'] ?? 0), color),
+                              metricBar(
+                                'Precision',
+                                (data['precision'] ?? 0),
+                                color,
+                              ),
                               const SizedBox(height: 8),
-                              _metricBar('Recall', (data['recall'] ?? 0), const Color(0xFFF59E0B)),
+                              metricBar(
+                                'Recall',
+                                (data['recall'] ?? 0),
+                                const Color(0xFFF59E0B),
+                              ),
                               const SizedBox(height: 8),
-                              _metricBar('F1-Score', (data['f1Score'] ?? 0), const Color(0xFF22C55E)),
+                              metricBar(
+                                'F1-Score',
+                                (data['f1Score'] ?? 0),
+                                const Color(0xFF22C55E),
+                              ),
                             ],
                           ),
                         );
@@ -1309,10 +1645,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildDashboardNavItem(Icons.home, 'Home', 0, isDark),
-                _buildDashboardNavItem(Icons.dashboard, 'Dashboard', 1, isDark),
-                _buildDashboardNavItem(Icons.notifications, 'Notification', 2, isDark),
-                _buildDashboardNavItem(Icons.settings, 'Setting', 3, isDark),
+                _buildDashboardNavItem('assets/Icons/HomeIcon.svg', 'Home', 0, isDark),
+                _buildDashboardNavItem('assets/Icons/DashboardIcon.svg', 'Dashboard', 1, isDark),
+                _buildDashboardNavItem('assets/Icons/NotificationIcon.svg', 'Notification', 2, isDark),
+                _buildDashboardNavItem('assets/Icons/SettingIcon.svg', 'Setting', 3, isDark),
               ],
             ),
           ),
@@ -1321,26 +1657,28 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     );
   }
 
-  Widget _buildDashboardNavItem(IconData icon, String label, int index, bool isDark) {
+  Widget _buildDashboardNavItem(
+    String svgAsset,
+    String label,
+    int index,
+    bool isDark,
+  ) {
     final isSelected = _currentBottomNavIndex == index;
-    
+
+    final Color iconColor =
+        isSelected
+            ? (isDark ? const Color(0xFF282828) : const Color(0xFFFEFEFE))
+            : (isDark ? Colors.white : Colors.black87);
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
+        if (index == _currentBottomNavIndex) return;
         if (index == 3) {
-          setState(() {
-            _currentBottomNavIndex = 3;
-          });
           _navigateTo(const SettingsPage());
         } else if (index == 2) {
-          setState(() {
-            _currentBottomNavIndex = 2;
-          });
           _navigateTo(const NotificationPage());
         } else if (index == 0) {
-          setState(() {
-            _currentBottomNavIndex = 0;
-          });
           _navigateTo(const HomePage());
         } else {
           setState(() {
@@ -1351,42 +1689,35 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 23, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF1976D2).withOpacity(0.3)
+              ? (isDark ? const Color.fromARGB(255, 173, 173, 173) : const Color(0xFF282828))
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: isSelected
-              ? Border.all(
-                  color: const Color(0xFF1976D2),
-                  width: 2.5,
-                )
-              : null,
+          borderRadius: BorderRadius.circular(13),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedScale(
-              scale: isSelected ? 1.1 : 1.0,
+              scale: 1.1,
               duration: const Duration(milliseconds: 200),
-              child: Icon(
-                icon,
-                color: isSelected
-                    ? const Color(0xFF1976D2)
-                    : (isDark ? Colors.white : Colors.black87),
-                size: 24,
+              curve: Curves.easeOutBack,
+              child: SvgPicture.asset(
+                svgAsset,
+                width: 24,
+                height: 24,
+                colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
               ),
             ),
             const SizedBox(height: 4),
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected
-                    ? const Color(0xFF1976D2)
-                    : (isDark ? Colors.white : Colors.black87),
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                height: 1.5,
+                color: iconColor,
               ),
               child: Text(label),
             ),

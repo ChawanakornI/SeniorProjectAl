@@ -1,23 +1,15 @@
 import 'dart:convert'; // สำหรับ jsonDecode
+import 'dart:io'; // สำหรับ Platform check
 // สำหรับ File operations
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http; // Import http
+import 'api_config.dart'; // Shared API configuration
 import 'camera_globals.dart'; // Import เพื่อเรียกใช้ตัวแปร 'cameras'
 import 'photo_preview_screen.dart'; // Import หน้า Preview (ต้องมีไฟล์นี้)
 
-// Configurable backend base; override via --dart-define=BACKSERVER_BASE=http://<host>:<port>
-const String _apiBase =
-    String.fromEnvironment('BACKSERVER_BASE', defaultValue: 'http://10.0.2.2:8000');
-const String _apiCheckPath = '/check-image';
-
 // Enum เพื่อกำหนดสถานะของกล้อง
-enum CameraStatus {
-  tooDark,
-  tooBright,
-  focusing,
-  good,
-}
+enum CameraStatus { tooDark, tooBright, focusing, good }
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -33,6 +25,10 @@ class _CameraScreenState extends State<CameraScreen> {
   // สถานะเริ่มต้น
   final CameraStatus _currentStatus = CameraStatus.good;
   bool _isTakingPicture = false;
+
+  // Multi-image support
+  final List<String> _takenImages = [];
+  final int _maxImages = 8;
 
   @override
   void initState() {
@@ -58,15 +54,18 @@ class _CameraScreenState extends State<CameraScreen> {
       enableAudio: false,
     );
 
-    _initializeControllerFuture = _controller!.initialize().then((_) {
-      if (!mounted) return;
-      _controller!.setFocusMode(FocusMode.auto);
-      setState(() {});
-    }).catchError((Object e) {
-      if (e is CameraException) {
-        print('Camera Error: ${e.code}');
-      }
-    });
+    _initializeControllerFuture = _controller!
+        .initialize()
+        .then((_) {
+          if (!mounted) return;
+          _controller!.setFocusMode(FocusMode.auto);
+          setState(() {});
+        })
+        .catchError((Object e) {
+          if (e is CameraException) {
+            print('Camera Error: ${e.code}');
+          }
+        });
   }
 
   @override
@@ -81,17 +80,31 @@ class _CameraScreenState extends State<CameraScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (c) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+      builder:
+          (c) => const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          ),
     );
 
     try {
       final uri = _buildCheckUri();
+      print("DEBUG: Connecting to URI: $uri (scheme: ${uri.scheme})");
 
       var request = http.MultipartRequest('POST', uri);
       request.files.add(await http.MultipartFile.fromPath('file', imagePath));
 
-      // ส่ง Request
-      var streamedResponse = await request.send();
+      // Add API key if configured
+      if (ApiConfig.apiKey != null) {
+        request.headers['X-API-Key'] = ApiConfig.apiKey!;
+      }
+
+      // ส่ง Request with timeout
+      var streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Request timed out. Server may be unreachable.');
+        },
+      );
       var response = await http.Response.fromStream(streamedResponse);
 
       // ปิด Loading
@@ -104,13 +117,12 @@ class _CameraScreenState extends State<CameraScreen> {
         if (jsonResponse['status'] == 'success') {
           return jsonResponse;
         } else {
+          // Blur check failed - show dialog asking user to retake
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(jsonResponse['message'] ?? 'Image check failed'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 2),
-              ),
+            final blurScore = jsonResponse['blur_score'] as num?;
+            await _showBlurErrorDialog(
+              message: jsonResponse['message'] ?? 'Image is too blurry',
+              blurScore: blurScore?.toDouble(),
             );
           }
           return null;
@@ -126,23 +138,234 @@ class _CameraScreenState extends State<CameraScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cannot connect to server. Check IP Address.')),
+          const SnackBar(
+            content: Text('Cannot connect to server. Check IP Address.'),
+          ),
         );
       }
-      return null; 
+      return null;
     }
   }
 
+  // Show dialog when image is too blurry
+  Future<void> _showBlurErrorDialog({
+    required String message,
+    double? blurScore,
+  }) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.blur_on, color: Colors.red, size: 28),
+              SizedBox(width: 12),
+              Text(
+                'Image Too Blurry',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: const TextStyle(fontSize: 16)),
+              if (blurScore != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Blur Score: ${blurScore.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              const Text(
+                'Please take a new picture with better focus and lighting.',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'Retake Photo',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Uri _buildCheckUri() {
-    final normalizedBase = _apiBase.endsWith('/')
-        ? _apiBase.substring(0, _apiBase.length - 1)
-        : _apiBase;
-    return Uri.parse('$normalizedBase$_apiCheckPath');
+    // Use shared config which handles URL sanitization (fixes htp://, https://, etc.)
+    final uri = ApiConfig.checkImageUri;
+    print("DEBUG: Using API endpoint: $uri (base: ${ApiConfig.baseUrl})");
+    return uri;
+  }
+
+  Future<String?> _showMultiImageOptions() async {
+    return await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+         final isDark =
+      Theme.of(dialogContext).brightness == Brightness.dark;
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Progress indicator
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Text(
+                    '${_takenImages.length}/$_maxImages photos taken',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue.shade800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                const Icon(Icons.camera_alt, size: 48, color: Colors.blue),
+                const SizedBox(height: 16),
+
+                Text(
+                  'Photo ${_takenImages.length} captured successfully!',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 8),
+                const Text(
+                  'What would you like to do next?',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color.fromARGB(255, 145, 145, 145), // Colors.grey[600]
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 24),
+
+                // Action buttons
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Continue taking photos (if not at limit)
+                    if (_takenImages.length < _maxImages)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed:
+                              () => Navigator.of(dialogContext).pop('continue'),
+                          icon: const Icon(Icons.add_a_photo),
+                          label: const Text('Take Another Photo'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    if (_takenImages.length < _maxImages)
+                      const SizedBox(height: 12),
+
+                    // Preview current photos
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            () => Navigator.of(dialogContext).pop('preview'),
+                        icon: const Icon(Icons.preview),
+                        label: const Text('Preview Photos'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Save current photos
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed:
+                            () => Navigator.of(dialogContext).pop('save'),
+                        icon: const Icon(Icons.save),
+                        label: Text(
+                          'Save ${_takenImages.length} Photo${_takenImages.length > 1 ? 's' : ''}',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   // --- 3. ฟังก์ชันถ่ายรูป (แก้ไขให้เชื่อมโยงกัน) ---
   Future<void> _takePicture() async {
-    if (_isTakingPicture || _controller == null || !_controller!.value.isInitialized) {
+    if (_isTakingPicture ||
+        _controller == null ||
+        !_controller!.value.isInitialized) {
+      return;
+    }
+
+    // Check if we've reached the limit
+    if (_takenImages.length >= _maxImages) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Maximum 8 images reached')));
       return;
     }
 
@@ -162,30 +385,43 @@ class _CameraScreenState extends State<CameraScreen> {
       final result = await _checkImageWithPython(image.path);
 
       if (result != null && result['status'] == 'success') {
-        // 3.3 ถ้าผ่าน -> ไปหน้า Preview (PhotoPreviewScreen)
-        final bool? shouldSave = await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => PhotoPreviewScreen(
-              imagePath: image.path,
-              predictions: (result['predictions'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>(),
-              blurScore: (result['blur_score'] as num?)?.toDouble(),
-              caseId: result['case_id'] as String?,
-            ),
-          ),
-        );
+        // Add image to collection
+        _takenImages.add(image.path);
 
-        // 3.4 ถ้าในหน้า Preview กด Save (shouldSave == true)
-        if (shouldSave == true) {
-          if (!mounted) return;
-          // ส่ง path รูปกลับไปให้หน้า Add Photo
-          Navigator.of(context).pop(image.path);
-        } else {
-          // ถ้ากด Retake ก็ไม่ต้องทำอะไร อยู่หน้ากล้องเหมือนเดิม
-          print("User wants to retake");
+        // Show multi-image options
+        final action = await _showMultiImageOptions();
+
+        switch (action) {
+          case 'continue':
+            // Continue taking more photos (stay in camera)
+            break;
+          case 'save':
+            // Save current images and return to add_photo
+            if (!mounted) return;
+            Navigator.of(context).pop(_takenImages);
+            break;
+          case 'preview':
+            // Show preview of all images
+            if (!mounted) return;
+            final shouldSave = await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder:
+                    (context) => PhotoPreviewScreen(
+                      imagePath: _takenImages.last, // Show the last taken image
+                      caseId: result['case_id'] as String?,
+                      isMultiImage: true,
+                      imageCount: _takenImages.length,
+                    ),
+              ),
+            );
+            if (shouldSave == true) {
+              if (!mounted) return;
+              Navigator.of(context).pop(_takenImages);
+            }
+            break;
         }
-      } 
+      }
       // ถ้ารูปไม่ผ่าน (_checkImageWithPython return false) มันจะโชว์ SnackBar แจ้งเตือนเองแล้ว
-
     } catch (e) {
       print(e);
     } finally {
@@ -201,18 +437,91 @@ class _CameraScreenState extends State<CameraScreen> {
   Map<String, dynamic> _getStatusInfo() {
     switch (_currentStatus) {
       case CameraStatus.tooDark:
-        return {'color': Colors.red, 'text': 'Too Dark', 'subtext': 'Please add more light.'};
+        return {
+          'color': Colors.red,
+          'text': 'Too Dark',
+          'subtext': 'Please add more light.',
+        };
       case CameraStatus.tooBright:
-        return {'color': Colors.red, 'text': 'Too Bright', 'subtext': 'Please reduce light.'};
+        return {
+          'color': Colors.red,
+          'text': 'Too Bright',
+          'subtext': 'Please reduce light.',
+        };
       case CameraStatus.focusing:
-        return {'color': Colors.yellow, 'text': 'Focusing...', 'subtext': 'Keep device still.'};
+        return {
+          'color': Colors.yellow,
+          'text': 'Focusing...',
+          'subtext': 'Keep device still.',
+        };
       case CameraStatus.good:
-      return {'color': Colors.green, 'text': 'Good', 'subtext': 'Ready to take picture.'};
+        return {
+          'color': Colors.green,
+          'text': 'Good',
+          'subtext': 'Ready to take picture.',
+        };
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Show error message if no cameras available (e.g., on macOS)
+    if (cameras.isEmpty) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.camera_alt_outlined,
+                  size: 64,
+                  color: Colors.white70,
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Camera Not Available',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  Platform.isMacOS
+                      ? 'The camera plugin does not support macOS.\nPlease use "Choose from Gallery" instead.'
+                      : 'No cameras found on this device.',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Go Back'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final statusInfo = _getStatusInfo();
     final statusColor = statusInfo['color'] as Color;
     final statusText = statusInfo['text'] as String;
@@ -223,7 +532,8 @@ class _CameraScreenState extends State<CameraScreen> {
       body: FutureBuilder<void>(
         future: _initializeControllerFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done && _controller != null) {
+          if (snapshot.connectionState == ConnectionState.done &&
+              _controller != null) {
             return Stack(
               fit: StackFit.expand,
               children: [
@@ -265,10 +575,37 @@ class _CameraScreenState extends State<CameraScreen> {
                     const SizedBox(height: 60),
                     const Text(
                       'Photo Skin Lesion',
-                      style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    const SizedBox(height: 20),
-                    
+                    const SizedBox(height: 8),
+                    // Progress counter for multi-image
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        '${_takenImages.length}/$_maxImages photos',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
                     // Status Indicators
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 30.0),
@@ -288,14 +625,21 @@ class _CameraScreenState extends State<CameraScreen> {
                             children: [
                               Text(
                                 statusText,
-                                style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 16),
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
                               Text(
                                 statusSubtext,
-                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
-                          )
+                          ),
                         ],
                       ),
                     ),
@@ -309,10 +653,7 @@ class _CameraScreenState extends State<CameraScreen> {
                           decoration: BoxDecoration(
                             color: Colors.transparent,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: statusColor,
-                              width: 2,
-                            ),
+                            border: Border.all(color: statusColor, width: 2),
                           ),
                         ),
                       ),
@@ -322,12 +663,51 @@ class _CameraScreenState extends State<CameraScreen> {
                     Container(
                       height: 150,
                       alignment: Alignment.center,
-                      child: FloatingActionButton(
-                        backgroundColor: Colors.white,
-                        onPressed: _currentStatus == CameraStatus.good ? _takePicture : null,
-                        child: _isTakingPicture
-                            ? const CircularProgressIndicator(color: Colors.black)
-                            : const Icon(Icons.camera_alt, color: Colors.black, size: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_takenImages.length >= _maxImages)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text(
+                                'Maximum photos reached',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 8),
+                          FloatingActionButton(
+                            backgroundColor:
+                                _takenImages.length >= _maxImages
+                                    ? Colors.grey
+                                    : Colors.white,
+                            onPressed:
+                                (_currentStatus == CameraStatus.good &&
+                                        _takenImages.length < _maxImages)
+                                    ? _takePicture
+                                    : null,
+                            child:
+                                _isTakingPicture
+                                    ? const CircularProgressIndicator(
+                                      color: Colors.black,
+                                    )
+                                    : const Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.black,
+                                      size: 32,
+                                    ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 30),
@@ -339,14 +719,20 @@ class _CameraScreenState extends State<CameraScreen> {
                   top: 40,
                   right: 20,
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 30,
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ),
               ],
             );
           } else {
-            return const Center(child: CircularProgressIndicator(color: Colors.white));
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
           }
         },
       ),
