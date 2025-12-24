@@ -155,6 +155,20 @@ class _HomePageState extends State<HomePage> {
     return date.subtract(Duration(days: daysFromMonday));
   }
 
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  void _jumpToToday() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    setState(() {
+      _selectedDate = today;
+      _currentMonth = DateTime(today.year, today.month, 1);
+      _currentWeekStart = _getWeekStart(today);
+    });
+  }
+
   List<CaseRecord> get _filteredCaseRecords {
     return _caseRecords.where((record) {
       // Filter by status
@@ -711,6 +725,8 @@ class _HomePageState extends State<HomePage> {
       if (width < 420) return 11.0;
       return 12.0;
     }();
+    final isTodaySelected =
+        _selectedDate != null && _isSameDay(_selectedDate!, today);
 
     return Container(
       margin: const EdgeInsets.all(20),
@@ -919,119 +935,181 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                     ),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              HapticFeedback.mediumImpact();
-                              setState(() {
-                                _isMonthView = !_isMonthView;
-                                if (_isMonthView) {
-                                  // Sync month view with current week
-                                  // Use the middle of the week to determine which month to show
-                                  final weekMiddle = _currentWeekStart.add(
-                                    const Duration(days: 3),
-                                  );
-                                  _currentMonth = DateTime(
-                                    weekMiddle.year,
-                                    weekMiddle.month,
-                                    1,
-                                  );
-                                  // If there's a selected date, ensure it's in the visible month
-                                  if (_selectedDate != null) {
-                                    final selectedMonth = DateTime(
-                                      _selectedDate!.year,
-                                      _selectedDate!.month,
-                                      1,
-                                    );
-                                    // If selected date is in a different month than week middle, use selected date's month
-                                    if (selectedMonth.month !=
-                                            weekMiddle.month ||
-                                        selectedMonth.year != weekMiddle.year) {
-                                      _currentMonth = selectedMonth;
-                                    }
-                                  }
-                                } else {
-                                  // Sync week view with selected date or current month
-                                  if (_selectedDate != null) {
-                                    // Use the week containing the selected date
-                                    _currentWeekStart = _getWeekStart(
-                                      _selectedDate!,
-                                    );
-                                  } else {
-                                    // Use today's week, or if today is not in current month, use first day of month's week
-                                    final today = DateTime.now();
-                                    if (today.year == _currentMonth.year &&
-                                        today.month == _currentMonth.month) {
-                                      _currentWeekStart = _getWeekStart(today);
-                                    } else {
-                                      final firstDayOfMonth = DateTime(
-                                        _currentMonth.year,
-                                        _currentMonth.month,
-                                        1,
-                                      );
-                                      _currentWeekStart = _getWeekStart(
-                                        firstDayOfMonth,
-                                      );
-                                    }
-                                  }
-                                }
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              margin: EdgeInsets.fromLTRB(0, 0, 5, 0),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 3,
-                                vertical: 2,
-                              ),
-                              decoration: glassCoverCalendar(
-                                isDark,
-                                radius: 30,
-                                highlight: true,
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: glassCalendarCircle(
-                                      isDark: isDark,
-                                    ),
-                                    child: Icon(
-                                      Icons.calendar_today,
-                                      color:
-                                          isDark
-                                              ? Colors.black87
-                                              : Colors.black87,
-                                      size: 18,
-                                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () {
+                                  HapticFeedback.mediumImpact();
+                                  _jumpToToday();
+                                },
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
                                   ),
-                                  const SizedBox(width: 2),
-                                  Text(
-                                    'Calendar',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-
-                                      color:
-                                          isDark
-                                              ? Colors.black87
-                                              : Colors.black87,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                  decoration: glassCoverCalendar(
+                                    isDark,
+                                    radius: 20,
+                                    highlight: isTodaySelected,
                                   ),
-                                  const SizedBox(width: 8),
-                                ],
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.today,
+                                        color:
+                                            isDark
+                                                ? Colors.black87
+                                                : Colors.black87,
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Today',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          color:
+                                              isDark
+                                                  ? Colors.black87
+                                                  : Colors.black87,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () {
+                                  HapticFeedback.mediumImpact();
+                                  setState(() {
+                                    _isMonthView = !_isMonthView;
+                                    if (_isMonthView) {
+                                      // Sync month view with current week
+                                      // Use the middle of the week to determine which month to show
+                                      final weekMiddle = _currentWeekStart.add(
+                                        const Duration(days: 3),
+                                      );
+                                      _currentMonth = DateTime(
+                                        weekMiddle.year,
+                                        weekMiddle.month,
+                                        1,
+                                      );
+                                      // If there's a selected date, ensure it's in the visible month
+                                      if (_selectedDate != null) {
+                                        final selectedMonth = DateTime(
+                                          _selectedDate!.year,
+                                          _selectedDate!.month,
+                                          1,
+                                        );
+                                        // If selected date is in a different month than week middle, use selected date's month
+                                        if (selectedMonth.month !=
+                                                weekMiddle.month ||
+                                            selectedMonth.year !=
+                                                weekMiddle.year) {
+                                          _currentMonth = selectedMonth;
+                                        }
+                                      }
+                                    } else {
+                                      // Sync week view with selected date or current month
+                                      if (_selectedDate != null) {
+                                        // Use the week containing the selected date
+                                        _currentWeekStart = _getWeekStart(
+                                          _selectedDate!,
+                                        );
+                                      } else {
+                                        // Use today's week, or if today is not in current month, use first day of month's week
+                                        final today = DateTime.now();
+                                        if (today.year == _currentMonth.year &&
+                                            today.month ==
+                                                _currentMonth.month) {
+                                          _currentWeekStart = _getWeekStart(
+                                            today,
+                                          );
+                                        } else {
+                                          final firstDayOfMonth = DateTime(
+                                            _currentMonth.year,
+                                            _currentMonth.month,
+                                            1,
+                                          );
+                                          _currentWeekStart = _getWeekStart(
+                                            firstDayOfMonth,
+                                          );
+                                        }
+                                      }
+                                    }
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  margin: EdgeInsets.fromLTRB(0, 0, 5, 0),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                    vertical: 2,
+                                  ),
+                                  decoration: glassCoverCalendar(
+                                    isDark,
+                                    radius: 30,
+                                    highlight: true,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 32,
+                                        height: 32,
+                                        decoration: glassCalendarCircle(
+                                          isDark: isDark,
+                                        ),
+                                        child: Icon(
+                                          Icons.calendar_today,
+                                          color:
+                                              isDark
+                                                  ? Colors.black87
+                                                  : Colors.black87,
+                                          size: 18,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        'Calendar',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+
+                                          color:
+                                              isDark
+                                                  ? Colors.black87
+                                                  : Colors.black87,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

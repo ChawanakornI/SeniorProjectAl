@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http; // Import http
 import 'api_config.dart'; // Shared API configuration
 import 'camera_globals.dart'; // Import เพื่อเรียกใช้ตัวแปร 'cameras'
 import 'photo_preview_screen.dart'; // Import หน้า Preview (ต้องมีไฟล์นี้)
+import '../../app_state.dart';
 
 // Enum เพื่อกำหนดสถานะของกล้อง
 enum CameraStatus { tooDark, tooBright, focusing, good }
@@ -93,10 +94,12 @@ class _CameraScreenState extends State<CameraScreen> {
       var request = http.MultipartRequest('POST', uri);
       request.files.add(await http.MultipartFile.fromPath('file', imagePath));
 
-      // Add API key if configured
-      if (ApiConfig.apiKey != null) {
-        request.headers['X-API-Key'] = ApiConfig.apiKey!;
-      }
+      request.headers.addAll(
+        ApiConfig.buildHeaders(
+          userId: appState.userId,
+          userRole: appState.userRole,
+        ),
+      );
 
       // ส่ง Request with timeout
       var streamedResponse = await request.send().timeout(
@@ -128,7 +131,7 @@ class _CameraScreenState extends State<CameraScreen> {
           return null;
         }
       } else {
-        print("Server Error: ${response.statusCode}");
+        print("Server Error: ${response.statusCode} - ${response.body}");
         return null;
       }
     } catch (e) {
@@ -540,32 +543,14 @@ class _CameraScreenState extends State<CameraScreen> {
                 // Layer 1: Camera Preview
                 CameraPreview(_controller!),
 
-                // Layer 2: Black Overlay with Hole
-                ColorFiltered(
-                  colorFilter: const ColorFilter.mode(
-                    Colors.black54,
-                    BlendMode.srcOut,
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.black,
-                          backgroundBlendMode: BlendMode.dstOut,
-                        ),
-                      ),
-                      Center(
-                        child: Container(
-                          height: 250,
-                          width: 250,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ],
+                // Layer 2: Black Overlay with cutout
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _CameraMaskPainter(
+                      holeSize: 250,
+                      borderRadius: 12,
+                      overlayColor: Colors.black54,
+                    ),
                   ),
                 ),
 
@@ -737,5 +722,47 @@ class _CameraScreenState extends State<CameraScreen> {
         },
       ),
     );
+  }
+}
+
+class _CameraMaskPainter extends CustomPainter {
+  _CameraMaskPainter({
+    required this.holeSize,
+    required this.borderRadius,
+    required this.overlayColor,
+  });
+
+  final double holeSize;
+  final double borderRadius;
+  final Color overlayColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final overlayPaint = Paint()..color = overlayColor;
+    final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final holeRect = Rect.fromCenter(
+      center: size.center(Offset.zero),
+      width: holeSize,
+      height: holeSize,
+    );
+    final holeRRect = RRect.fromRectAndRadius(
+      holeRect,
+      Radius.circular(borderRadius),
+    );
+    final overlayPath = Path()..addRect(fullRect);
+    final holePath = Path()..addRRect(holeRRect);
+    final cutout = Path.combine(
+      PathOperation.difference,
+      overlayPath,
+      holePath,
+    );
+    canvas.drawPath(cutout, overlayPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CameraMaskPainter oldDelegate) {
+    return holeSize != oldDelegate.holeSize ||
+        borderRadius != oldDelegate.borderRadius ||
+        overlayColor != oldDelegate.overlayColor;
   }
 }

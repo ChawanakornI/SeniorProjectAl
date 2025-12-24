@@ -50,6 +50,9 @@ class ApiConfig {
   /// Next case ID endpoint
   static Uri get nextCaseIdUri => Uri.parse('$baseUrl/cases/next-id');
 
+  /// Release case ID endpoint
+  static Uri get releaseCaseIdUri => Uri.parse('$baseUrl/cases/release-id');
+
   /// Reject case endpoint
   static Uri get rejectCaseUri => Uri.parse('$baseUrl/cases/reject');
 

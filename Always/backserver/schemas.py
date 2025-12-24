@@ -57,6 +57,10 @@ class CaseLog(BaseModel):
     created_at: Optional[str] = None  # ISO format timestamp
 
 
+class CaseIdRelease(BaseModel):
+    case_id: str
+
+
 class CaseUpdate(BaseModel):
     user_id: Optional[str] = None
     user_role: Optional[str] = None

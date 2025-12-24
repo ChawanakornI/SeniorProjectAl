@@ -116,6 +116,7 @@ class _LoginFormState extends State<LoginForm> {
     appState.setFirstName(_firstNames[username] ?? '');
     appState.setLastName(_lastNames[username] ?? '');
     appState.setUserRole(_roles[username] ?? '');
+    appState.setUserId(username);
 
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed(

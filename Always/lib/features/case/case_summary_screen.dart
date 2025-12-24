@@ -57,18 +57,28 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
     return paths.isNotEmpty ? paths.first : '';
   }
 
-  // Get all image paths
+  // Get all image paths (deduplicated)
   List<String> get _allImagePaths {
-    final candidates = <String>[
-      ...widget.imagePaths.map((p) => p.trim()).where((p) => p.isNotEmpty),
-    ];
-
-    final fallback = widget.imagePath.trim();
-    if (fallback.isNotEmpty) {
-      candidates.add(fallback);
+    final uniquePaths = <String>{};
+    
+    // Add paths from imagePaths list
+    for (final p in widget.imagePaths) {
+      final trimmed = p.trim();
+      if (trimmed.isNotEmpty) {
+        uniquePaths.add(trimmed);
+      }
     }
 
-    return candidates.where((path) {
+    // Only add fallback imagePath if imagePaths is empty
+    // This prevents duplicates when both contain the same path
+    if (uniquePaths.isEmpty) {
+      final fallback = widget.imagePath.trim();
+      if (fallback.isNotEmpty) {
+        uniquePaths.add(fallback);
+      }
+    }
+
+    return uniquePaths.where((path) {
       if (_isNetworkPath(path)) return true;
       return File(path).existsSync();
     }).toList();

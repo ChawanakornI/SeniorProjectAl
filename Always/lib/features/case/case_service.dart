@@ -188,6 +188,41 @@ class CaseService {
     }
   }
 
+  /// Release the most recently issued case ID if it was not used.
+  Future<void> releaseCaseId(String caseId) async {
+    log('Releasing case ID $caseId', name: 'CaseService');
+
+    try {
+      final headers = ApiConfig.buildHeaders(
+        json: true,
+        userId: appState.userId,
+        userRole: appState.userRole,
+      );
+
+      final response = await http
+          .post(
+            ApiConfig.releaseCaseIdUri,
+            headers: headers,
+            body: jsonEncode({'case_id': caseId}),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        log(
+          'Failed to release case ID: ${response.statusCode}',
+          name: 'CaseService',
+        );
+        throw Exception('Failed to release case ID: ${response.statusCode}');
+      }
+    } on SocketException catch (e) {
+      log('Network error: $e', name: 'CaseService');
+      throw Exception('Cannot connect to server.');
+    } catch (e) {
+      log('Error releasing case ID: $e', name: 'CaseService');
+      rethrow;
+    }
+  }
+
   /// Log a confirmed/pending case to the backend.
   Future<void> logCase({
     required String caseId,

@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'glass.dart';
 
 class GlassInlineDropdown extends StatefulWidget {
   final String label;
@@ -147,133 +148,128 @@ class _GlassInlineDropdownState extends State<GlassInlineDropdown>
   }
 
   OverlayEntry _createOverlay() {
-  final renderBox = context.findRenderObject() as RenderBox;
-  final size = renderBox.size;
-  final offset = renderBox.localToGlobal(Offset.zero);
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
 
-  final dropdownTop = offset.dy + size.height + 8;
+    return OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            // Transparent tap-to-close layer
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _removeOverlay,
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+            // Positioned dropdown using follower
+            CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(0, size.height - 1),
+              child: Material(
+                color: Colors.transparent,
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(10),
+                    bottomRight: Radius.circular(10),
+                  ),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                    child: Container(
+                      width: size.width, 
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: widget.isDark
+                            ? Colors.white.withOpacity(0.08)
+                            : Colors.white.withOpacity(0.6),
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(10),
+                          bottomRight: Radius.circular(10),
+                        ),
+                        border: Border.all(
+                          color: widget.isDark
+                              ? Colors.white.withOpacity(0.2)
+                              : Colors.grey.shade300,
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(widget.isDark ? 0.25 : 0.1),
+                            blurRadius: 20,
+                            spreadRadius: 0,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: widget.items.map((item) {
+                            final isSelected = item == widget.value;
+                            final textColor = widget.isDark ? Colors.white : const Color(0xFF282828);
 
-  return OverlayEntry(
-    builder: (context) {
-      return Positioned.fill(
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: _removeOverlay, // tap outside = close
-          child: Stack(
-            children: [
-              // 🔹 Dropdown only (no background, no dim)
-              Positioned(
-                top: dropdownTop,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: BackdropFilter(
-                        filter:
-                            ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                        child: Container(
-                          width:
-                              MediaQuery.of(context).size.width * 0.85,
-                          constraints:
-                              const BoxConstraints(maxHeight: 360),
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.7),
-                              width: 1.4,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color:
-                                    Colors.black.withOpacity(0.18),
-                                blurRadius: 28,
-                                offset: const Offset(0, 12),
+                            return GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                widget.onChanged(item);
+                                _removeOverlay();
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.symmetric(vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                  horizontal: 16,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? (widget.isDark 
+                                          ? Colors.white.withOpacity(0.15)
+                                          : Colors.grey.shade200)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    if (isSelected)
+                                      Icon(
+                                        Icons.check_circle,
+                                        size: 18,
+                                        color: widget.isDark 
+                                            ? Colors.white70 
+                                            : Colors.grey.shade700,
+                                      ),
+                                    if (isSelected) const SizedBox(width: 10),
+                                    Text(
+                                      item,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.w500,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ],
-                          ),
-                          child: SingleChildScrollView(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: widget.items.map((item) {
-                                final isSelected =
-                                    item == widget.value;
-
-                                return GestureDetector(
-                                  onTap: () {
-                                    HapticFeedback.lightImpact();
-                                    widget.onChanged(item);
-                                    _removeOverlay();
-                                  },
-                                  child: Container(
-                                    width: double.infinity,
-                                    margin:
-                                        const EdgeInsets.symmetric(
-                                            vertical: 4),
-                                    padding:
-                                        const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                      horizontal: 18,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? Colors.blue
-                                              .withOpacity(0.25)
-                                          : Colors.transparent,
-                                      borderRadius:
-                                          BorderRadius.circular(10),
-                                      border: isSelected
-                                          ? Border.all(
-                                              color: Colors.blue
-                                                  .withOpacity(0.5),
-                                              width: 1.5,
-                                            )
-                                          : null,
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        if (isSelected)
-                                          const Icon(
-                                            Icons.check_circle,
-                                            size: 18,
-                                            color: Colors.blue,
-                                          ),
-                                        if (isSelected)
-                                          const SizedBox(width: 12),
-                                        Text(
-                                          item,
-                                          style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: isSelected
-                                                ? FontWeight.bold
-                                                : FontWeight.w600,
-                                            color: Colors.black87,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
+                            );
+                          }).toList(),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-}
+            ),
+          ],
+        );
+      },
+    );
+  }
 
 }
 

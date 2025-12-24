@@ -16,7 +16,7 @@ from PIL import Image
 from . import config
 from . import crypto_utils
 from .model import model_service
-from .schemas import CheckImageResponse, CaseLog, CaseUpdate, RejectCase
+from .schemas import CheckImageResponse, CaseLog, CaseUpdate, RejectCase, CaseIdRelease
 
 app = FastAPI()
 
@@ -258,6 +258,14 @@ def _next_case_id() -> str:
         return str(next_id)
 
 
+def _case_id_has_entries(case_id: str) -> bool:
+    entries = _read_all_metadata_entries()
+    for entry in entries:
+        if entry.get("case_id") == case_id:
+            return True
+    return False
+
+
 def _case_metadata_keys(entry: Dict[str, Any]) -> Dict[str, Any]:
     payload_keys = ("gender", "age", "location", "symptoms", "notes")
     return {key: entry.get(key) for key in payload_keys if entry.get(key) not in (None, [], "")}
@@ -389,6 +397,33 @@ async def health():
 @app.post("/cases/next-id", dependencies=[Depends(require_api_key)])
 async def next_case_id(user_context: Dict[str, str] = Depends(get_user_context)):
     return {"case_id": _next_case_id()}
+
+
+@app.post("/cases/release-id", dependencies=[Depends(require_api_key)])
+async def release_case_id(
+    payload: CaseIdRelease,
+    user_context: Dict[str, str] = Depends(get_user_context),
+):
+    case_id = payload.case_id.strip()
+    if not case_id or not case_id.isdigit():
+        raise HTTPException(status_code=400, detail="Invalid case_id")
+
+    with _CASE_ID_LOCK:
+        last_id = _read_case_counter()
+        if last_id is None:
+            return {"status": "skipped", "reason": "missing_counter"}
+        if str(last_id) != case_id:
+            return {
+                "status": "skipped",
+                "reason": "counter_mismatch",
+                "last_case_id": str(last_id),
+            }
+        if _case_id_has_entries(case_id):
+            return {"status": "skipped", "reason": "case_in_use"}
+        next_last_id = max(last_id - 1, config.CASE_ID_START - 1)
+        _write_case_counter(next_last_id)
+
+    return {"status": "ok", "case_id": case_id}
 
 
 @app.post("/check-image", response_model=CheckImageResponse, dependencies=[Depends(require_api_key)])

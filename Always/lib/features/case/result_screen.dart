@@ -412,9 +412,6 @@ class _ResultScreenState extends State<ResultScreen> {
   Widget _buildImageDecisionsSection(bool isDark) {
     final hasImages = widget.imagePaths.isNotEmpty;
     final displayIndex = hasImages ? _currentImageIndex + 1 : 0;
-    final topLabel =
-        _topPredictionForImage(_currentImageIndex)?['label'] ?? 'Unknown';
-    final topConf = _topConfidenceForImage(_currentImageIndex) * 100;
     final currentDecision =
         hasImages ? (_imageDecisions[_currentImageIndex] ?? "None") : "None";
     Color decisionColor;
