@@ -11,7 +11,11 @@ import 'features/case/camera_globals.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // Load global persisted settings (theme, language, etc.)
+  // User-specific data (profile, names) is loaded after login
+  await appState.loadPersistedData();
+
   // Camera plugin doesn't support macOS, so handle gracefully
   if (Platform.isMacOS) {
     debugPrint('Camera plugin not supported on macOS. Using empty camera list.');
@@ -30,7 +34,7 @@ Future<void> main() async {
       cameras = [];
     }
   }
-  
+
   runApp(const MyApp());
 }
 

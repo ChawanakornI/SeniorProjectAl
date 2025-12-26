@@ -1,12 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../theme/glass.dart';
 import '../../theme/glass_inline_dropdown.dart';
-import '../../theme/customCheckBox.dart';
+import '../../theme/custom_check_box.dart';
 
 import 'add_photo.dart';
 import 'case_service.dart';
@@ -23,6 +23,8 @@ class NewCaseScreen extends StatefulWidget {
     this.initialSymptoms,
     this.initialImagePaths = const [],
     this.initialPredictions = const [],
+    this.initialCreatedAt,
+    this.initialUpdatedAt,
     this.isEditing = false,
     this.persistChanges = false,
   });
@@ -34,6 +36,8 @@ class NewCaseScreen extends StatefulWidget {
   final List<String>? initialSymptoms;
   final List<String> initialImagePaths;
   final List<Map<String, dynamic>> initialPredictions;
+  final String? initialCreatedAt;
+  final String? initialUpdatedAt;
   final bool isEditing;
   final bool persistChanges;
 
@@ -48,10 +52,13 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
   String? _selectedSpecificLocation;
   late final TextEditingController _hashController;
   String? _caseId;
+  late final String _createdAt;
+  String? _updatedAt;
   bool _isCaseIdLoading = false;
   bool _isSaving = false;
   bool _releaseRequested = false;
   bool _releaseAfterLoad = false;
+  List<String> _selectedImagePaths = [];
 
   // State for symptoms checkboxes
   final Map<String, bool> _symptoms = {
@@ -74,10 +81,17 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     _selectedAge = widget.initialAge;
     _selectedSpecificLocation = widget.initialLocation;
     _caseId = widget.initialCaseId;
-    
+    _createdAt = (widget.initialCreatedAt?.trim().isNotEmpty ?? false)
+        ? widget.initialCreatedAt!.trim()
+        : DateTime.now().toIso8601String();
+    _updatedAt = (widget.initialUpdatedAt?.trim().isNotEmpty ?? false)
+        ? widget.initialUpdatedAt!.trim()
+        : _createdAt;
+    _selectedImagePaths = _normalizeImagePaths(widget.initialImagePaths);
+
     // Set initial text. If caseId is missing, we'll fetch it.
     _hashController = TextEditingController(text: _caseId ?? 'Loading...');
-    
+
     if (_caseId == null || _caseId!.isEmpty) {
       _loadCaseId();
     }
@@ -128,10 +142,11 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
         _hashController.text = 'Error';
       });
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isCaseIdLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isCaseIdLoading = false;
+        });
+      }
     }
   }
 
@@ -146,6 +161,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     });
 
     try {
+      _updatedAt = DateTime.now().toIso8601String();
       if (widget.persistChanges) {
         await CaseService().updateCase(
           caseId: _caseId!,
@@ -157,7 +173,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
       }
       if (!mounted) return;
 
-      final imagePaths = widget.initialImagePaths;
+      final imagePaths = _selectedImagePaths;
       await Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder:
@@ -170,6 +186,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                 imagePaths: imagePaths,
                 imagePath: imagePaths.isNotEmpty ? imagePaths.first : '',
                 predictions: widget.initialPredictions,
+                createdAt: _createdAt,
+                updatedAt: _updatedAt,
                 isPrePrediction: !widget.persistChanges,
               ),
         ),
@@ -209,17 +227,18 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     Navigator.of(context).pop();
   }
 
-  Future<bool> _onWillPop() async {
-    await _releaseCaseIdIfNeeded();
-    return true;
+  void _handlePopInvokedWithResult(bool didPop, Object? result) {
+    if (didPop) {
+      _releaseCaseIdIfNeeded();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      onPopInvokedWithResult: _handlePopInvokedWithResult,
       child: Scaffold(
         extendBodyBehindAppBar: true,
         backgroundColor: isDark
@@ -311,6 +330,13 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                   ),
                 ),
 
+                if (widget.isEditing) ...[
+                  const SizedBox(height: 25),
+                  _sectionTitle('Images', isDark),
+                  const SizedBox(height: 15),
+                  _buildImagesSection(isDark),
+                ],
+
                 const SizedBox(height: 30),
                 _bottomButtons(isDark),
               ],
@@ -335,7 +361,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
             :Color(0xFFFBFBFB),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.35 : 0.18),
+                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.18),
                   blurRadius: 24,
                   offset: const Offset(0, 12),
                 ),
@@ -364,7 +390,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                 filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                 child: Container(
                   color: isDark
-                      ? Colors.black.withOpacity(0.45)
+                      ? Colors.black.withValues(alpha: 0.45)
                       : const Color(0xFFFBFBFB),
                 ),
               ),
@@ -428,7 +454,9 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
           decoration: InputDecoration(
             filled: true,
             fillColor:
-                isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade100,
+                isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.grey.shade100,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           ),
         ),
@@ -465,6 +493,199 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     );
   }
 
+  List<String> _normalizeImagePaths(List<String> paths) {
+    final normalized = <String>[];
+    final seen = <String>{};
+    for (final path in paths) {
+      final trimmed = path.trim();
+      if (trimmed.isEmpty) continue;
+      if (seen.add(trimmed)) {
+        normalized.add(trimmed);
+      }
+    }
+    return normalized;
+  }
+
+  bool _isNetworkPath(String path) {
+    final lower = path.toLowerCase();
+    return lower.startsWith('http://') || lower.startsWith('https://');
+  }
+
+  Widget _buildImagePlaceholder(bool isDark) {
+    return Container(
+      color: isDark ? const Color(0xFF2C2C2E) : Colors.grey.shade200,
+      child: Icon(
+        Icons.broken_image_outlined,
+        color: isDark ? Colors.white54 : Colors.grey.shade500,
+        size: 28,
+      ),
+    );
+  }
+
+  Widget _buildImageThumbnail(String path, bool isDark) {
+    final placeholder = _buildImagePlaceholder(isDark);
+    if (_isNetworkPath(path)) {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => placeholder,
+      );
+    }
+    final file = File(path);
+    if (!file.existsSync()) return placeholder;
+    return Image.file(
+      file,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => placeholder,
+    );
+  }
+
+  Widget _buildImagePreviewGrid(bool isDark) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _selectedImagePaths.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1,
+      ),
+      itemBuilder: (context, index) {
+        final path = _selectedImagePaths[index];
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox.expand(child: _buildImageThumbnail(path, isDark)),
+        );
+      },
+    );
+  }
+
+  Widget _buildImageEmptyState(bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color:
+            isDark
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? Colors.white24 : Colors.grey.shade300,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.photo_library_outlined,
+            color: isDark ? Colors.white60 : Colors.grey.shade600,
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No images selected. Add photos to update this case.',
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.grey.shade700,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editImages() async {
+    final result = await showDialog<List<String>>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor:
+          const Color.fromARGB(255, 223, 223, 223).withValues(alpha: 0.25),
+      builder: (_) {
+        return Stack(
+          children: [
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(color: Colors.transparent),
+            ),
+            Center(
+              child: AddPhotoDialog(
+                caseId: _caseId,
+                initialImages: _selectedImagePaths,
+                title: 'Edit Photos',
+                subtitle: 'Update lesion photos for this case',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || result == null) return;
+    setState(() {
+      _selectedImagePaths = _normalizeImagePaths(result);
+    });
+  }
+
+  Widget _buildImagesSection(bool isDark) {
+    final count = _selectedImagePaths.length;
+    final label =
+        count == 0 ? 'No images selected' : '$count image${count == 1 ? '' : 's'} selected';
+    final actionLabel = count == 0 ? 'Add Photos' : 'Edit Photos';
+
+    return _buildGlassSection(
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : Colors.grey.shade700,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: _editImages,
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(
+                    color:
+                        isDark
+                            ? Colors.white24
+                            : Colors.grey.shade400,
+                  ),
+                  foregroundColor:
+                      isDark ? Colors.white70 : Colors.grey.shade700,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: const Icon(Icons.photo_library_outlined, size: 18),
+                label: Text(
+                  actionLabel,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          count == 0 ? _buildImageEmptyState(isDark) : _buildImagePreviewGrid(isDark),
+        ],
+      ),
+    );
+  }
+
   void _showGlassSnackBar(String message, {bool isError = true}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
@@ -492,15 +713,22 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                     constraints: const BoxConstraints(maxWidth: 280),
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                     decoration: glassBox(isDark, radius: 30).copyWith(
-                      color: isError 
-                          ? (isDark ? Colors.red.withOpacity(0.2) : Colors.red.withOpacity(0.1))
-                          : (isDark ? Colors.black.withOpacity(0.6) : Colors.white.withOpacity(0.8)),
+                      color: isError
+                          ? (isDark
+                              ? Colors.red.withValues(alpha: 0.2)
+                              : Colors.red.withValues(alpha: 0.1))
+                          : (isDark
+                              ? Colors.black.withValues(alpha: 0.6)
+                              : Colors.white.withValues(alpha: 0.8)),
                       border: isError
-                          ? Border.all(color: Colors.red.withOpacity(0.4), width: 1.2)
+                          ? Border.all(
+                              color: Colors.red.withValues(alpha: 0.4),
+                              width: 1.2,
+                            )
                           : null,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
+                          color: Colors.black.withValues(alpha: 0.15),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -584,7 +812,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                   side: BorderSide(
                     color:
                         isDark
-                            ? Colors.white.withOpacity(0.5)
+                            ? Colors.white.withValues(alpha: 0.5)
                             : Colors.grey.shade400,
                   ),
                   shape: RoundedRectangleBorder(
@@ -625,7 +853,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   backgroundColor:
-                      isDark ? Colors.white.withOpacity(0.9) : Colors.black,
+                      isDark ? Colors.white.withValues(alpha: 0.9) : Colors.black,
                   foregroundColor: isDark ? Colors.black : Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -648,7 +876,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     showDialog(
         context: context,
         barrierDismissible: false,
-        barrierColor: const Color.fromARGB(255, 223, 223, 223).withOpacity(0.25),
+        barrierColor: const Color.fromARGB(255, 223, 223, 223)
+            .withValues(alpha: 0.25),
         builder: (dialogContext) {
         final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
 
@@ -671,11 +900,13 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                         decoration: BoxDecoration(
                         color: isDark
                             ? const Color(0xFF282828)
-                            : Colors.white.withOpacity(0.92),
+                            : Colors.white.withValues(alpha: 0.92),
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                             BoxShadow(
-                            color: Colors.black.withOpacity(isDark ? 0.45 : 0.25),
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.45 : 0.25,
+                            ),
                             blurRadius: 30,
                             offset: const Offset(0, 15),
                             ),
@@ -746,7 +977,9 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                         final List<String>? result = await showDialog<List<String>>(
                                             context: context,
                                             barrierDismissible: false,
-                                            barrierColor: const Color.fromARGB(255, 223, 223, 223).withOpacity(0.25),
+                                            barrierColor:
+                                                const Color.fromARGB(255, 223, 223, 223)
+                                                    .withValues(alpha: 0.25),
                                             builder: (_) {
                                             return Stack(
                                                 children: [
@@ -754,7 +987,11 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                                     filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                                                     child: Container(color: Colors.transparent),
                                                 ),
-                                                const Center(child: AddPhotoDialog()),
+                                                Center(
+                                                  child: AddPhotoDialog(
+                                                    caseId: _caseId,
+                                                  ),
+                                                ),
                                                 ],
                                             );
                                             },
@@ -765,6 +1002,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
 
                                         // Ensure we have a case ID (should be loaded by initState)
                                         final caseId = _caseId ?? 'Unknown';
+                                        final createdAt = _createdAt;
+                                        final updatedAt = _updatedAt ?? _createdAt;
 
                                         final selectedSymptoms = _symptoms.entries
                                             .where((e) => e.value)
@@ -787,7 +1026,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                         if (shouldSave == true && context.mounted) {
                                             await Navigator.of(context).push(
                                             MaterialPageRoute(
-                                                builder: (_) => CaseSummaryScreen(
+                                            builder: (_) => CaseSummaryScreen(
                                                 caseId: caseId,
                                                 gender: _selectedGender,
                                                 age: _selectedAge,
@@ -795,6 +1034,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                                 symptoms: selectedSymptoms,
                                                 imagePaths: result,
                                                 imagePath: result.first,
+                                                createdAt: createdAt,
+                                                updatedAt: updatedAt,
                                                 isPrePrediction: true,
                                                 ),
                                             ),

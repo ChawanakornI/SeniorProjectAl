@@ -6,7 +6,18 @@ import 'package:image/image.dart' as img;
 import 'camera_screen.dart'; // ตรวจสอบว่า import ไฟล์นี้ถูกต้องตามโปรเจกต์คุณ
 
 class AddPhotoDialog extends StatefulWidget {
-  const AddPhotoDialog({super.key});
+  const AddPhotoDialog({
+    super.key,
+    this.caseId,
+    this.initialImages = const [],
+    this.title,
+    this.subtitle,
+  });
+
+  final String? caseId;
+  final List<String> initialImages;
+  final String? title;
+  final String? subtitle;
 
   @override
   State<AddPhotoDialog> createState() => _AddPhotoDialogState();
@@ -15,6 +26,16 @@ class AddPhotoDialog extends StatefulWidget {
 class _AddPhotoDialogState extends State<AddPhotoDialog> {
   final List<String> _selectedImages = [];
   final int _maxImages = 8;
+  late final List<String> _initialImages;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialImages = _normalizeImages(widget.initialImages);
+    if (_initialImages.isNotEmpty) {
+      _selectedImages.addAll(_initialImages.take(_maxImages));
+    }
+  }
 
   // ฟังก์ชันเพิ่มรูปเข้า List
   void _addImage(String path) {
@@ -81,6 +102,62 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
     } catch (_) {
       return false;
     }
+  }
+
+  List<String> _normalizeImages(List<String> paths) {
+    final normalized = <String>[];
+    final seen = <String>{};
+    for (final path in paths) {
+      final trimmed = path.trim();
+      if (trimmed.isEmpty) continue;
+      if (seen.add(trimmed)) {
+        normalized.add(trimmed);
+      }
+    }
+    return normalized;
+  }
+
+  bool get _hasChanges {
+    if (_initialImages.length != _selectedImages.length) return true;
+    final initialSet = _initialImages.toSet();
+    for (final path in _selectedImages) {
+      if (!initialSet.contains(path)) return true;
+    }
+    return false;
+  }
+
+  bool _isNetworkPath(String path) {
+    final lower = path.toLowerCase();
+    return lower.startsWith('http://') || lower.startsWith('https://');
+  }
+
+  Widget _buildThumbnailPlaceholder(bool isDark) {
+    return Container(
+      color: isDark ? const Color(0xFF2C2C2E) : Colors.grey.shade200,
+      child: Icon(
+        Icons.broken_image_outlined,
+        color: isDark ? Colors.white54 : Colors.grey.shade500,
+        size: 24,
+      ),
+    );
+  }
+
+  Widget _buildThumbnail(String path, bool isDark) {
+    final placeholder = _buildThumbnailPlaceholder(isDark);
+    if (_isNetworkPath(path)) {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => placeholder,
+      );
+    }
+    final file = File(path);
+    if (!file.existsSync()) return placeholder;
+    return Image.file(
+      file,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => placeholder,
+    );
   }
 
   void _showBlurDialog() {
@@ -160,7 +237,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                   // CameraScreen now returns List<String> (multiple paths) or String (single path)
                   final result = await Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (context) => const CameraScreen(),
+                      builder: (context) => CameraScreen(caseId: widget.caseId),
                     ),
                   );
                   if (result != null) {
@@ -209,7 +286,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
 
   // --- NEW: ฟังก์ชันสำหรับกดปุ่ม Cancel หรือ ปิดหน้า ---
   void _handleCancel() {
-    if (_selectedImages.isEmpty) {
+    if (!_hasChanges) {
       // ถ้าไม่มีรูปเลย ให้ปิดหน้าได้เลย ไม่ต้องถาม
       Navigator.of(context).pop();
     } else {
@@ -268,7 +345,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
             filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
             child: Container(
               color: const Color.fromARGB(255, 223, 223, 223)
-                  .withOpacity(isDark ? 0.15 : 0.25),
+                  .withValues(alpha: isDark ? 0.15 : 0.25),
             ),
           ),
 
@@ -383,6 +460,9 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dialogTitle = widget.title ?? 'Add Photo';
+    final dialogSubtitle =
+        widget.subtitle ?? 'Upload lesion photos to predict the result';
 
     return Dialog(
       backgroundColor: Colors.transparent, // สำคัญ
@@ -397,7 +477,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.45 : 0.25),
+              color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.25),
               blurRadius: 30,
               offset: const Offset(0, 15),
             ),
@@ -414,7 +494,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                   Row(
                     children: [
                       Text(
-                        'Add Photo',
+                        dialogTitle,
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -449,7 +529,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                   const SizedBox(height: 8),
 
                   Text(
-                    'Upload lesion photos to predict the result',
+                    dialogSubtitle,
                     style: TextStyle(
                       fontSize: 14,
                       color: isDark ? Colors.white60 : Colors.grey,
@@ -615,13 +695,10 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                image: DecorationImage(
-                  image: FileImage(File(imagePath)),
-                  fit: BoxFit.cover,
-                ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox.expand(
+                child: _buildThumbnail(imagePath, isDark),
               ),
             ),
             Positioned(

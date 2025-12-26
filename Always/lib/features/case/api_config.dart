@@ -7,17 +7,18 @@
 /// For real device on same network, use your computer's local IP.
 library;
 
+import 'dart:developer';
+
 class ApiConfig {
   ApiConfig._();
 
   /// Raw value from environment (may have typos)
   static const String _rawBase =
       String.fromEnvironment('BACKSERVER_BASE', defaultValue: 'http://10.0.2.2:8000');
-
   /// Sanitized base URL - always starts with http://
   static String get baseUrl {
     String base = _rawBase.trim();
-    
+
     // Fix common typos: htp://, ht://, https:// -> http://
     if (base.startsWith('htp://')) {
       base = 'http://${base.substring(6)}';
@@ -29,12 +30,12 @@ class ApiConfig {
     } else if (!base.startsWith('http://')) {
       base = 'http://$base';
     }
-    
+
     // Remove trailing slash
     if (base.endsWith('/')) {
       base = base.substring(0, base.length - 1);
     }
-    
+
     return base;
   }
 
@@ -89,9 +90,9 @@ class ApiConfig {
 
   /// Debug: print the resolved config
   static void printConfig() {
-    print('[ApiConfig] Raw BACKSERVER_BASE: $_rawBase');
-    print('[ApiConfig] Resolved baseUrl: $baseUrl');
-    print('[ApiConfig] checkImageUri: $checkImageUri');
-    print('[ApiConfig] apiKey set: ${apiKey != null}');
+    log('[ApiConfig] Raw BACKSERVER_BASE: $_rawBase', name: 'ApiConfig');
+    log('[ApiConfig] Resolved baseUrl: $baseUrl', name: 'ApiConfig');
+    log('[ApiConfig] checkImageUri: $checkImageUri', name: 'ApiConfig');
+    log('[ApiConfig] apiKey set: ${apiKey != null}', name: 'ApiConfig');
   }
 }

@@ -20,6 +20,8 @@ class CaseSummaryScreen extends StatefulWidget {
   final String imagePath; // For backward compatibility
   final List<Map<String, dynamic>> predictions;
   final double? blurScore;
+  final String? createdAt;
+  final String? updatedAt;
   final int? imageCount;
   final String? aggregationInfo;
   final bool isPrePrediction; // NEW: Flag to show Edit/Run Prediction buttons
@@ -35,6 +37,8 @@ class CaseSummaryScreen extends StatefulWidget {
     this.imagePath = '',
     this.predictions = const [],
     this.blurScore,
+    this.createdAt,
+    this.updatedAt,
     this.imageCount,
     this.aggregationInfo,
     this.isPrePrediction = false, // Default to old behavior
@@ -46,6 +50,7 @@ class CaseSummaryScreen extends StatefulWidget {
 
 class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
   bool _isLoading = false;
+  late final String _fallbackCreatedAt;
 
   // For image carousel
   late PageController _imagePageController;
@@ -93,6 +98,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
   void initState() {
     super.initState();
     _imagePageController = PageController();
+    _fallbackCreatedAt = DateTime.now().toIso8601String();
   }
 
   @override
@@ -203,7 +209,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: (isDarkLoading ? Colors.white : Colors.black)
-                            .withOpacity(0.1),
+                            .withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
@@ -247,6 +253,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
       // Run prediction
       final predictionResult = await PredictionService().predictMultiple(
         _allImagePaths,
+        caseId: widget.caseId,
       );
       final predictions =
           predictionResult['predictions'] as List<Map<String, dynamic>>;
@@ -296,6 +303,10 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final createdAtRaw = _resolveCreatedAtRaw();
+    final updatedAtRaw = _resolveUpdatedAtRaw(createdAtRaw);
+    final createdAtText = _formatTimestamp(createdAtRaw);
+    final updatedAtText = _formatTimestamp(updatedAtRaw);
 
     final topPrediction =
         widget.predictions.isNotEmpty ? widget.predictions.first : null;
@@ -313,7 +324,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                 color: Colors.transparent,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.45 : 0.18),
+                    color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.18),
                     blurRadius: 24,
                     offset: const Offset(0, 12),
                   ),
@@ -345,7 +356,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                   child: Container(
                     color:
                         isDark
-                            ? Colors.black.withOpacity(0.45)
+                            ? Colors.black.withValues(alpha: 0.45)
                             : const Color(0xFFFBFBFB),
                   ),
                 ),
@@ -382,13 +393,13 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                             color: (widget.isPrePrediction
                                     ? Colors.blue
                                     : Colors.green)
-                                .withOpacity(0.15),
+                                .withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: (widget.isPrePrediction
                                       ? Colors.blue
                                       : Colors.green)
-                                  .withOpacity(0.3),
+                                  .withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(
@@ -447,6 +458,25 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                                     color: isDark ? Colors.white : Colors.black,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildDetailItem(
+                                    isDark,
+                                    'Created at',
+                                    createdAtText,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _buildDetailItem(
+                                    isDark,
+                                    'Last updated',
+                                    updatedAtText,
                                   ),
                                 ),
                               ],
@@ -567,7 +597,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                                                       ),
                                                   decoration: BoxDecoration(
                                                     color: Colors.black
-                                                        .withOpacity(0.5),
+                                                        .withValues(alpha: 0.5),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                           16,
@@ -642,7 +672,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: (isDark ? Colors.white : Colors.black)
-                                      .withOpacity(0.05),
+                                      .withValues(alpha: 0.05),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Column(
@@ -705,10 +735,10 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
+                                  color: Colors.blue.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: Colors.blue.withOpacity(0.3),
+                                    color: Colors.blue.withValues(alpha: 0.3),
                                   ),
                                 ),
                                 child: Row(
@@ -766,16 +796,16 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                                             decoration: BoxDecoration(
                                               color:
                                                   isDark
-                                                      ? Colors.blue.withOpacity(
+                                                      ? Colors.blue.withValues(alpha: 
                                                         0.2,
                                                       )
-                                                      : Colors.blue.withOpacity(
+                                                      : Colors.blue.withValues(alpha: 
                                                         0.1,
                                                       ),
                                               borderRadius:
                                                   BorderRadius.circular(20),
                                               border: Border.all(
-                                                color: Colors.blue.withOpacity(
+                                                color: Colors.blue.withValues(alpha: 
                                                   0.3,
                                                 ),
                                               ),
@@ -808,7 +838,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.black.withOpacity(0.5) : Colors.white,
+                  color: isDark ? Colors.black.withValues(alpha: 0.5) : Colors.white,
                   border: Border(top: BorderSide(color: Colors.grey.shade300)),
                 ),
                 child:
@@ -839,10 +869,18 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                         MaterialPageRoute(
                           builder:
                               (_) => NewCaseScreen(
+                                initialCaseId: widget.caseId,
                                 initialGender: widget.gender,
                                 initialAge: widget.age,
                                 initialLocation: widget.location,
                                 initialSymptoms: widget.symptoms,
+                                initialImagePaths: _allImagePaths,
+                                initialPredictions: widget.predictions,
+                                initialCreatedAt: _resolveCreatedAtRaw(),
+                                initialUpdatedAt: _resolveUpdatedAtRaw(
+                                  _resolveCreatedAtRaw(),
+                                ),
+                                isEditing: true,
                               ),
                         ),
                       );
@@ -1010,5 +1048,44 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
         ),
       ),
     );
+  }
+
+  String _resolveCreatedAtRaw() {
+    final raw = widget.createdAt?.trim();
+    if (raw != null && raw.isNotEmpty) return raw;
+    return _fallbackCreatedAt;
+  }
+
+  String _resolveUpdatedAtRaw(String createdAtRaw) {
+    final raw = widget.updatedAt?.trim();
+    if (raw != null && raw.isNotEmpty) return raw;
+    return createdAtRaw;
+  }
+
+  DateTime? _parseTimestamp(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      return DateTime.parse(raw.trim());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  DateTime _toThailandTime(DateTime dateTime) {
+    final utc = dateTime.isUtc ? dateTime : dateTime.toUtc();
+    return utc.add(const Duration(hours: 7));
+  }
+
+  String _formatTimestamp(String? raw) {
+    final parsed = _parseTimestamp(raw);
+    if (parsed == null) return '-';
+    final th = _toThailandTime(parsed);
+    final day = th.day.toString().padLeft(2, '0');
+    final month = th.month.toString().padLeft(2, '0');
+    final year = th.year.toString().padLeft(4, '0');
+    final hour = th.hour.toString().padLeft(2, '0');
+    final minute = th.minute.toString().padLeft(2, '0');
+    final second = th.second.toString().padLeft(2, '0');
+    return '$day-$month-$year $hour:$minute:$second';
   }
 }

@@ -51,7 +51,7 @@
 //             ),
 //             Positioned.fill(
 //               child: Container(
-//                 color: (isDark ? Colors.black : Colors.white).withOpacity(0.08),
+//                 color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.08),
 //               ),
 //             ),
 //             Center(
@@ -66,7 +66,7 @@
 //                         decoration: BoxDecoration(
 //                           boxShadow: [
 //                             BoxShadow(
-//                               color: Colors.white.withOpacity(0.18 * pulse),
+//                               color: Colors.white.withValues(alpha: 0.18 * pulse),
 //                               blurRadius: 18 * pulse,
 //                               spreadRadius: 2,
 //                             ),
@@ -95,9 +95,9 @@
 //                             begin: Alignment.centerLeft,
 //                             end: Alignment.centerRight,
 //                             colors: [
-//                               Colors.white.withOpacity(0.0),
-//                               Colors.white.withOpacity(0.55),
-//                               Colors.white.withOpacity(0.0),
+//                               Colors.white.withValues(alpha: 0.0),
+//                               Colors.white.withValues(alpha: 0.55),
+//                               Colors.white.withValues(alpha: 0.0),
 //                             ],
 //                             stops: const [0.20, 0.5, 0.80],
 //                             transform: _SlidingGradientTransform(slide),
@@ -110,7 +110,7 @@
 //                     child: Image.asset(
 //                       'assets/images/ALLCARE.png',
 //                       height: 48,
-//                       color: Colors.white.withOpacity(0.7),
+//                       color: Colors.white.withValues(alpha: 0.7),
 //                       colorBlendMode: BlendMode.srcIn,
 //                     ),
 //                   ),
@@ -210,7 +210,7 @@ class _LoadingScreenState extends State<LoadingScreen>
 
           Positioned.fill(
             child: Container(
-              color: (isDark ? Colors.black : Colors.white).withOpacity(0.08),
+              color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.08),
             ),
           ),
 
@@ -223,7 +223,7 @@ class _LoadingScreenState extends State<LoadingScreen>
                   'assets/images/LogoVector.svg',
                   height: 120,
                   colorFilter: ColorFilter.mode(
-                    Colors.white.withOpacity(0.9),
+                    Colors.white.withValues(alpha: 0.9),
                     BlendMode.srcIn,
                   ),
                 ),
@@ -232,7 +232,7 @@ class _LoadingScreenState extends State<LoadingScreen>
                   'assets/images/AllcareTextVector.svg',
                   height: 48,
                   colorFilter: ColorFilter.mode(
-                    Colors.white.withOpacity(0.7),
+                    Colors.white.withValues(alpha: 0.7),
                     BlendMode.srcIn,
                   ),
                 ),

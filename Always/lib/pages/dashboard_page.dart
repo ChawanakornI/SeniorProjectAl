@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 //import 'package:fl_chart/fl_chart.dart';
 
 
+import '../app_state.dart';
 import '../theme/glass.dart';
 import '../features/case/case_service.dart';
 import '../features/case/case_summary_screen.dart';
@@ -594,31 +595,46 @@ class _DashboardPageState extends State<DashboardPage>
                 ),
               ),
               const SizedBox(width: 12),
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ProfileSettingsPage(),
+              ListenableBuilder(
+                listenable: appState,
+                builder: (context, _) {
+                  return GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ProfileSettingsPage(),
+                        ),
+                      );
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: glassCircle(isDark, highlight: true),
+                          child: appState.profileImageFile != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Image.file(
+                                    appState.profileImageFile!,
+                                    width: 42,
+                                    height: 42,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.person,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                        ),
+                      ),
                     ),
                   );
                 },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: glassCircle(isDark, highlight: true),
-                      child: Icon(
-                        Icons.person,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ],
           ),
@@ -678,8 +694,8 @@ class _DashboardPageState extends State<DashboardPage>
                           isSelected
                               ? null
                               : (isDark
-                                  ? Colors.white.withOpacity(0.08)
-                                  : Colors.black.withOpacity(0.05)),
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : Colors.black.withValues(alpha: 0.05)),
                       borderRadius: BorderRadius.circular(26),
                       boxShadow:
                           isSelected
@@ -687,7 +703,7 @@ class _DashboardPageState extends State<DashboardPage>
                                 BoxShadow(
                                   color: const Color(
                                     0xFF2563EB,
-                                  ).withOpacity(0.4),
+                                  ).withValues(alpha: 0.4),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),
@@ -828,7 +844,7 @@ class _DashboardPageState extends State<DashboardPage>
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(isDark ? 0.2 : 0.15),
+                        color: color.withValues(alpha: isDark ? 0.2 : 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(icon, color: color, size: 22),
@@ -841,8 +857,8 @@ class _DashboardPageState extends State<DashboardPage>
                       decoration: BoxDecoration(
                         color:
                             changePositive
-                                ? const Color(0xFF22C55E).withOpacity(0.15)
-                                : const Color(0xFFEF4444).withOpacity(0.15),
+                                ? const Color(0xFF22C55E).withValues(alpha: 0.15)
+                                : const Color(0xFFEF4444).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -949,8 +965,8 @@ class _DashboardPageState extends State<DashboardPage>
                         decoration: BoxDecoration(
                           color:
                               isDark
-                                  ? Colors.white.withOpacity(0.1)
-                                  : Colors.black.withOpacity(0.05),
+                                  ? Colors.white.withValues(alpha: 0.1)
+                                  : Colors.black.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -991,14 +1007,14 @@ class _DashboardPageState extends State<DashboardPage>
                           decoration: BoxDecoration(
                             color:
                                 isDark
-                                    ? Colors.white.withOpacity(0.08)
-                                    : Colors.black.withOpacity(0.05),
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color:
                                   isDark
-                                      ? Colors.white.withOpacity(0.08)
-                                      : Colors.black.withOpacity(0.06),
+                                      ? Colors.white.withValues(alpha: 0.08)
+                                      : Colors.black.withValues(alpha: 0.06),
                               width: 1,
                             ),
                           ),
@@ -1054,7 +1070,7 @@ class _DashboardPageState extends State<DashboardPage>
                                         ? LinearGradient(
                                           colors: [
                                             (trend['colors'] as List<Color>)[index],
-                                            (trend['colors'] as List<Color>)[index].withOpacity(0.7),
+                                            (trend['colors'] as List<Color>)[index].withValues(alpha: 0.7),
                                           ],
                                           begin: Alignment.bottomCenter,
                                           end: Alignment.topCenter,
@@ -1072,7 +1088,7 @@ class _DashboardPageState extends State<DashboardPage>
                                       BoxShadow(
                                         color: (isStacked
                                             ? (trend['colors'] as List<Color>)[index]
-                                            : const Color(0xFF3B82F6)).withOpacity(0.3),
+                                            : const Color(0xFF3B82F6)).withValues(alpha: 0.3),
                                         blurRadius: 8,
                                         offset: const Offset(0, 4),
                                       ),
@@ -1165,7 +1181,9 @@ class _DashboardPageState extends State<DashboardPage>
                           final isMax = entry.value == maxCount;
                           return DataRow(
                             color: isMax
-                                ? MaterialStateProperty.all(Colors.red.withOpacity(0.1))
+                                ? WidgetStateProperty.all(
+                                    Colors.red.withValues(alpha: 0.1),
+                                  )
                                 : null,
                             cells: [
                               DataCell(
@@ -1298,6 +1316,8 @@ class _DashboardPageState extends State<DashboardPage>
                                   symptoms: caseRecord.symptoms,
                                   imagePaths: caseRecord.imagePaths,
                                   predictions: caseRecord.predictions,
+                                  createdAt: caseRecord.createdAt,
+                                  updatedAt: caseRecord.updatedAt,
                                   isPrePrediction: false,
                                 ),
                           ),
@@ -1311,14 +1331,14 @@ class _DashboardPageState extends State<DashboardPage>
                         decoration: BoxDecoration(
                           color:
                               isDark
-                                  ? Colors.white.withOpacity(0.05)
-                                  : Colors.black.withOpacity(0.03),
+                                  ? Colors.white.withValues(alpha: 0.05)
+                                  : Colors.black.withValues(alpha: 0.03),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color:
                                 isDark
-                                    ? Colors.white.withOpacity(0.08)
-                                    : Colors.black.withOpacity(0.05),
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.05),
                           ),
                         ),
                         child: Row(
@@ -1326,7 +1346,7 @@ class _DashboardPageState extends State<DashboardPage>
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: typeColor.withOpacity(0.15),
+                                color: typeColor.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(typeIcon, color: typeColor, size: 20),
@@ -1481,7 +1501,7 @@ class _DashboardPageState extends State<DashboardPage>
 
     await showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.55),
+      barrierColor: Colors.black.withValues(alpha: 0.55),
       builder: (ctx) {
         return Dialog(
           backgroundColor: Colors.transparent,
@@ -1578,14 +1598,14 @@ class _DashboardPageState extends State<DashboardPage>
                           decoration: BoxDecoration(
                             color:
                                 isDark
-                                    ? Colors.white.withOpacity(0.04)
-                                    : Colors.black.withOpacity(0.03),
+                                    ? Colors.white.withValues(alpha: 0.04)
+                                    : Colors.black.withValues(alpha: 0.03),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color:
                                   isDark
-                                      ? Colors.white.withOpacity(0.08)
-                                      : Colors.black.withOpacity(0.05),
+                                      ? Colors.white.withValues(alpha: 0.08)
+                                      : Colors.black.withValues(alpha: 0.05),
                             ),
                           ),
                           child: Column(

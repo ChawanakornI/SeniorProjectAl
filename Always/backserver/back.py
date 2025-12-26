@@ -55,7 +55,7 @@ def _normalize_user_id(user_id: Optional[str]) -> Optional[str]:
 
 
 def _role_allows_global_access(user_role: str) -> bool:
-    return user_role in {"doctor", "admin"}
+    return user_role in {"admin"}
 
 
 def get_user_context(
@@ -215,6 +215,63 @@ def _read_all_metadata_entries() -> List[Dict[str, Any]]:
     return entries
 
 
+def _user_counter_path(user_id: str) -> Path:
+    """Get the path to the user-specific case counter file."""
+    user_dir = _user_storage_dir(user_id)
+    return user_dir / "case_counter.json"
+
+
+def _read_user_case_counter(user_id: str) -> Optional[int]:
+    """Read the case counter for a specific user."""
+    counter_path = _user_counter_path(user_id)
+    if not counter_path.exists():
+        return None
+    try:
+        data = json.loads(counter_path.read_text(encoding="utf-8"))
+        last_id = data.get("last_case_id")
+        return int(last_id)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _write_user_case_counter(user_id: str, last_id: int) -> None:
+    """Write the case counter for a specific user."""
+    counter_path = _user_counter_path(user_id)
+    counter_path.parent.mkdir(parents=True, exist_ok=True)
+    counter_path.write_text(json.dumps({"last_case_id": last_id}), encoding="utf-8")
+
+
+def _max_case_id_from_user_metadata(user_id: str) -> Optional[int]:
+    """Find the maximum case ID from a user's metadata entries."""
+    metadata_path = _user_metadata_path(user_id)
+    entries = _read_metadata_entries(metadata_path)
+    max_id = None
+    for entry in entries:
+        case_id = entry.get("case_id")
+        if isinstance(case_id, str) and case_id.isdigit():
+            if len(case_id) > _CASE_ID_MAX_DIGITS:
+                continue
+            value = int(case_id)
+            if value < config.CASE_ID_START:
+                continue
+            if max_id is None or value > max_id:
+                max_id = value
+    return max_id
+
+
+def _next_case_id_for_user(user_id: str) -> str:
+    """Generate the next case ID for a specific user. Starts from 10001."""
+    with _CASE_ID_LOCK:
+        last_id = _read_user_case_counter(user_id)
+        if last_id is None:
+            # Check existing metadata for this user to find max case_id
+            last_id = _max_case_id_from_user_metadata(user_id) or (config.CASE_ID_START - 1)
+        next_id = max(last_id + 1, config.CASE_ID_START)
+        _write_user_case_counter(user_id, next_id)
+        return str(next_id)
+
+
+# Legacy global counter functions (kept for backwards compatibility)
 def _read_case_counter() -> Optional[int]:
     counter_path = Path(config.CASE_COUNTER_FILE)
     if not counter_path.exists():
@@ -305,7 +362,7 @@ def _log_case_entry(
     entry = payload.model_dump()
     case_id = entry.get("case_id")
     if case_id is None or str(case_id).strip() == "":
-        entry["case_id"] = _next_case_id()
+        entry["case_id"] = _next_case_id_for_user(user_id)
     else:
         entry["case_id"] = str(case_id)
     entry["entry_type"] = entry_type
@@ -396,7 +453,8 @@ async def health():
 
 @app.post("/cases/next-id", dependencies=[Depends(require_api_key)])
 async def next_case_id(user_context: Dict[str, str] = Depends(get_user_context)):
-    return {"case_id": _next_case_id()}
+    user_id = user_context["user_id"]
+    return {"case_id": _next_case_id_for_user(user_id)}
 
 
 @app.post("/cases/release-id", dependencies=[Depends(require_api_key)])
@@ -408,8 +466,10 @@ async def release_case_id(
     if not case_id or not case_id.isdigit():
         raise HTTPException(status_code=400, detail="Invalid case_id")
 
+    user_id = user_context["user_id"]
+
     with _CASE_ID_LOCK:
-        last_id = _read_case_counter()
+        last_id = _read_user_case_counter(user_id)
         if last_id is None:
             return {"status": "skipped", "reason": "missing_counter"}
         if str(last_id) != case_id:
@@ -418,10 +478,14 @@ async def release_case_id(
                 "reason": "counter_mismatch",
                 "last_case_id": str(last_id),
             }
-        if _case_id_has_entries(case_id):
+        # Check if case_id has entries in user's metadata
+        metadata_path = _user_metadata_path(user_id)
+        entries = _read_metadata_entries(metadata_path)
+        case_in_use = any(entry.get("case_id") == case_id for entry in entries)
+        if case_in_use:
             return {"status": "skipped", "reason": "case_in_use"}
         next_last_id = max(last_id - 1, config.CASE_ID_START - 1)
-        _write_case_counter(next_last_id)
+        _write_user_case_counter(user_id, next_last_id)
 
     return {"status": "ok", "case_id": case_id}
 
@@ -446,9 +510,9 @@ async def check_image(
     predictions = model_service.predict(pil_image)
 
     image_id = str(uuid.uuid4())
-    case_id = case_id or _next_case_id()
     user_id = user_context["user_id"]
     user_role = user_context.get("user_role", "")
+    case_id = case_id or _next_case_id_for_user(user_id)
     _save_image(contents, image_id, user_id)
 
     status = "success" if blur_score >= config.BLUR_THRESHOLD else "fail"

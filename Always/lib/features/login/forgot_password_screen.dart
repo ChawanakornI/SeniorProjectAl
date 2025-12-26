@@ -59,7 +59,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
-              color: (isDark ? Colors.black : Colors.white).withOpacity(0.28),
+              color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.28),
             ),
           ),
         ),
@@ -77,8 +77,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Colors.black.withOpacity(isDark ? 0.55 : 0.2),
-                    Colors.black.withOpacity(isDark ? 0.4 : 0.12),
+                    Colors.black.withValues(alpha: isDark ? 0.55 : 0.2),
+                    Colors.black.withValues(alpha: isDark ? 0.4 : 0.12),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -88,12 +88,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           _glowBlob(
             alignment: Alignment.topRight,
-            color: const Color(0xFF60A5FA).withOpacity(0.32),
+            color: const Color(0xFF60A5FA).withValues(alpha: 0.32),
             size: 220,
           ),
           _glowBlob(
             alignment: Alignment.bottomLeft,
-            color: const Color(0xFF22D3EE).withOpacity(0.28),
+            color: const Color(0xFF22D3EE).withValues(alpha: 0.28),
             size: 240,
             blur: 42,
           ),
@@ -131,7 +131,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                   fontSize: 14,
                                   color: isDark
                                       ? Colors.white70
-                                      : Colors.black.withOpacity(0.65),
+                                      : Colors.black.withValues(alpha: 0.65),
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -154,18 +154,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                   filled: true,
                                   fillColor:
                                       isDark
-                                          ? Colors.white.withOpacity(0.04)
-                                          : Colors.white.withOpacity(0.75),
+                                          ? Colors.white.withValues(alpha: 0.04)
+                                          : Colors.white.withValues(alpha: 0.75),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(14),
                                     borderSide: BorderSide(
-                                      color: Colors.white.withOpacity(0.24),
+                                      color: Colors.white.withValues(alpha: 0.24),
                                     ),
                                   ),
                                   enabledBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(14),
                                     borderSide: BorderSide(
-                                      color: Colors.white.withOpacity(
+                                      color: Colors.white.withValues(alpha: 
                                         isDark ? 0.18 : 0.12,
                                       ),
                                     ),

@@ -92,7 +92,7 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.blue.withOpacity(0.3),
+                              color: Colors.blue.withValues(alpha: 0.3),
                               blurRadius: 15,
                               offset: const Offset(0, 5),
                             ),
@@ -225,7 +225,7 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -256,7 +256,7 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.25),
+                      color: Colors.black.withValues(alpha: 0.25),
                       blurRadius: 15,
                       offset: const Offset(0, 8),
                     ),
@@ -280,7 +280,7 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(

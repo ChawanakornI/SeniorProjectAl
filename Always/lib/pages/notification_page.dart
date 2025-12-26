@@ -23,7 +23,7 @@ class _NotificationPageState extends State<NotificationPage> {
   List<CaseRecord> _cases = [];
   bool _isLoading = false;
   String? _error;
-  int _currentBottomNavIndex = 2;
+  final int _currentBottomNavIndex = 2;
   String _filter = 'all'; // all, new_case, pending
 
   @override
@@ -119,10 +119,10 @@ class _NotificationPageState extends State<NotificationPage> {
                     decoration: BoxDecoration(
                       color:
                           selected
-                              ? const Color(0xFF2563EB).withOpacity(0.2)
+                              ? const Color(0xFF2563EB).withValues(alpha: 0.2)
                               : (isDark
-                                  ? Colors.white.withOpacity(0.08)
-                                  : Colors.black.withOpacity(0.06)),
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : Colors.black.withValues(alpha: 0.06)),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color:
@@ -137,7 +137,7 @@ class _NotificationPageState extends State<NotificationPage> {
                                 BoxShadow(
                                   color: const Color(
                                     0xFF2563EB,
-                                  ).withOpacity(0.28),
+                                  ).withValues(alpha: 0.28),
                                   blurRadius: 12,
                                   offset: const Offset(0, 6),
                                 ),
@@ -281,14 +281,14 @@ class _NotificationPageState extends State<NotificationPage> {
                           decoration: BoxDecoration(
                             color:
                                 isDark
-                                    ? Colors.white.withOpacity(0.1)
-                                    : Colors.black.withOpacity(0.05),
+                                    ? Colors.white.withValues(alpha: 0.1)
+                                    : Colors.black.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color:
                                   isDark
-                                      ? Colors.white.withOpacity(0.2)
-                                      : Colors.black.withOpacity(0.1),
+                                      ? Colors.white.withValues(alpha: 0.2)
+                                      : Colors.black.withValues(alpha: 0.1),
                             ),
                           ),
                           child: Row(
@@ -443,6 +443,8 @@ class _NotificationPageState extends State<NotificationPage> {
                                               symptoms: caseItem.symptoms,
                                               imagePaths: caseItem.imagePaths,
                                               predictions: caseItem.predictions,
+                                              createdAt: caseItem.createdAt,
+                                              updatedAt: caseItem.updatedAt,
                                               isPrePrediction: false,
                                             ),
                                       ),
@@ -463,7 +465,7 @@ class _NotificationPageState extends State<NotificationPage> {
                                           highlight: true,
                                         ).copyWith(
                                           border: Border.all(
-                                            color: color.withOpacity(
+                                            color: color.withValues(alpha: 
                                               isDark ? 0.6 : 0.4,
                                             ),
                                             width: 1.6,
@@ -482,8 +484,8 @@ class _NotificationPageState extends State<NotificationPage> {
                                               ).copyWith(
                                                 gradient: LinearGradient(
                                                   colors: [
-                                                    color.withOpacity(0.8),
-                                                    color.withOpacity(0.5),
+                                                    color.withValues(alpha: 0.8),
+                                                    color.withValues(alpha: 0.5),
                                                   ],
                                                   begin: Alignment.topLeft,
                                                   end: Alignment.bottomRight,
@@ -514,7 +516,7 @@ class _NotificationPageState extends State<NotificationPage> {
                                                               ),
                                                           decoration: BoxDecoration(
                                                             color: color
-                                                                .withOpacity(
+                                                                .withValues(alpha: 
                                                                   isDark
                                                                       ? 0.28
                                                                       : 0.18,
@@ -525,7 +527,7 @@ class _NotificationPageState extends State<NotificationPage> {
                                                                 ),
                                                             border: Border.all(
                                                               color: color
-                                                                  .withOpacity(
+                                                                  .withValues(alpha: 
                                                                     0.4,
                                                                   ),
                                                               width: 1.1,

@@ -159,6 +159,19 @@ class _HomePageState extends State<HomePage> {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
+  /// Check if a given date has at least one case
+  bool _hasCase(DateTime date) {
+    return _caseRecords.any((record) {
+      if (record.createdAt == null) return false;
+      try {
+        final caseDate = DateTime.parse(record.createdAt!);
+        return _isSameDay(caseDate, date);
+      } catch (e) {
+        return false;
+      }
+    });
+  }
+
   void _jumpToToday() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -194,15 +207,19 @@ class _HomePageState extends State<HomePage> {
 
       // Filter by selected date (if any)
       bool dateMatch = true;
-      if (_selectedDate != null && record.createdAt != null) {
-        try {
-          final recordDate = DateTime.parse(record.createdAt!);
-          dateMatch =
-              recordDate.year == _selectedDate!.year &&
-              recordDate.month == _selectedDate!.month &&
-              recordDate.day == _selectedDate!.day;
-        } catch (_) {
-          dateMatch = true; // If parsing fails, include the record
+      if (_selectedDate != null) {
+        if (record.createdAt == null) {
+          dateMatch = false;
+        } else {
+          try {
+            final recordDate = DateTime.parse(record.createdAt!).toLocal();
+            dateMatch =
+                recordDate.year == _selectedDate!.year &&
+                recordDate.month == _selectedDate!.month &&
+                recordDate.day == _selectedDate!.day;
+          } catch (_) {
+            dateMatch = false;
+          }
         }
       }
 
@@ -302,30 +319,44 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ProfileSettingsPage(),
+              ListenableBuilder(
+                listenable: appState,
+                builder: (context, _) {
+                  return GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ProfileSettingsPage(),
+                        ),
+                      );
+                    },
+                    child: ClipOval(
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: glassCircle(isDark, highlight: true),
+                          child: appState.profileImageFile != null
+                              ? ClipOval(
+                                  child: Image.file(
+                                    appState.profileImageFile!,
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.person,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                        ),
+                      ),
                     ),
                   );
                 },
-                child: ClipOval(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: glassCircle(isDark, highlight: true),
-                      child: Icon(
-                        Icons.person,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ],
           ),
@@ -385,8 +416,8 @@ class _HomePageState extends State<HomePage> {
                         BoxShadow(
                           color:
                               isDark
-                                  ? Colors.black.withOpacity(0.27)
-                                  : Colors.black.withOpacity(0.1),
+                                  ? Colors.black.withValues(alpha: 0.27)
+                                  : Colors.black.withValues(alpha: 0.1),
                               
                           blurRadius: isDark? 15:12,
                           spreadRadius: 2,
@@ -540,7 +571,7 @@ class _HomePageState extends State<HomePage> {
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.25), // shadow color
+                          color: Colors.black.withValues(alpha: 0.25), // shadow color
                           blurRadius: 2.5, // softness
                           offset: const Offset(0, 2), // vertical shadow
                         ),
@@ -710,15 +741,15 @@ class _HomePageState extends State<HomePage> {
         date.year == _currentMonth.year && date.month == _currentMonth.month;
     final baseTextColor = isDark ? Colors.white : Color(0xFFFBFBFB);
     final mutedTextColor =
-        isDark ? Colors.white.withOpacity(0.7) : Colors.black.withOpacity(0.6);
+        isDark ? Colors.white.withValues(alpha: 0.7) : Colors.black.withValues(alpha: 0.6);
     final accent = isDark ? const Color(0xFF38BDF8) : const Color(0xFFFBFBFB);
     final selectionFill = isDark ? Color(0xFF282828) : Color(0xFF282828);
-    final selectionBorder = accent.withOpacity(isDark ? 0.9 : 0.8);
+    final selectionBorder = accent.withValues(alpha: isDark ? 0.9 : 0.8);
     final selectionTextColor = isDark ? Colors.black : Color(0xFFFBFBFB);
     final todayFill =
-        isDark ? Colors.white.withOpacity(0.18) : Color(0xFFFEFEFE);
+        isDark ? Colors.white.withValues(alpha: 0.18) : Color(0xFFFEFEFE);
     final todayBorder =
-        isDark ? Colors.white.withOpacity(0.7) : Color(0xFFFEFEFE);
+        isDark ? Colors.white.withValues(alpha: 0.7) : Color(0xFFFEFEFE);
     final navLabelSize = () {
       final width = MediaQuery.of(context).size.width;
       if (width < 360) return 10.0;
@@ -767,7 +798,7 @@ class _HomePageState extends State<HomePage> {
                                                 190,
                                                 190,
                                               ))
-                                          .withOpacity(0.3),
+                                          .withValues(alpha: 0.3),
                               size: 30,
                             ),
                             onPressed:
@@ -864,7 +895,7 @@ class _HomePageState extends State<HomePage> {
                                           ? Colors.white
                                           : Color(0xFFFBFBFB))
                                       : (isDark ? Colors.white : Colors.black87)
-                                          .withOpacity(0.3),
+                                          .withValues(alpha: 0.3),
                               size: 30,
                             ),
                             onPressed:
@@ -1155,6 +1186,7 @@ class _HomePageState extends State<HomePage> {
                                   date.month == today.month &&
                                   date.day == today.day;
                               final isCurrentMonthDay = isCurrentMonth(date);
+                              final hasCase = _hasCase(date);
 
                               return Expanded(
                                 child: GestureDetector(
@@ -1219,24 +1251,44 @@ class _HomePageState extends State<HomePage> {
                                                         )
                                                         : null),
                                           ),
-                                          child: Center(
-                                            child: Text(
-                                              '${date.day}',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                                color:
-                                                    isSelected
-                                                        ? selectionTextColor
-                                                        : isToday
-                                                        ? const Color(
-                                                          0xFF282828,
-                                                        )
-                                                        : (isCurrentMonthDay
-                                                            ? baseTextColor
-                                                            : mutedTextColor),
+                                          child: Stack(
+                                            children: [
+                                              Center(
+                                                child: Text(
+                                                  '${date.day}',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                    color:
+                                                        isSelected
+                                                            ? selectionTextColor
+                                                            : isToday
+                                                            ? const Color(
+                                                              0xFF282828,
+                                                            )
+                                                            : (isCurrentMonthDay
+                                                                ? baseTextColor
+                                                                : mutedTextColor),
+                                                  ),
+                                                ),
                                               ),
-                                            ),
+                                              if (hasCase)
+                                                Positioned(
+                                                  bottom: 2,
+                                                  left: 0,
+                                                  right: 0,
+                                                  child: Center(
+                                                    child: Container(
+                                                      width: 4,
+                                                      height: 4,
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFF22C55E),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
                                           ),
                                         ),
                                       ),
@@ -1267,6 +1319,7 @@ class _HomePageState extends State<HomePage> {
                               date.year == today.year &&
                               date.month == today.month &&
                               date.day == today.day;
+                          final hasCase = _hasCase(date);
 
                           return Expanded(
                             child: GestureDetector(
@@ -1307,7 +1360,7 @@ class _HomePageState extends State<HomePage> {
                                                         255,
                                                         255,
                                                       )
-                                                          .withOpacity(0.7)
+                                                          .withValues(alpha: 0.7)
                                                       : const Color.fromARGB(
                                                         255,
                                                         255,
@@ -1317,7 +1370,7 @@ class _HomePageState extends State<HomePage> {
                                               width: 1.4,
                                             )
                                             : Border.all(
-                                              color: Colors.white.withOpacity(
+                                              color: Colors.white.withValues(alpha: 
                                                 0.9,
                                               ),
                                               width: 1.4,
@@ -1350,13 +1403,24 @@ class _HomePageState extends State<HomePage> {
                                                   ? const Color(0xFF282828)
                                                   : isToday
                                                   ? const Color(0xFFFBFBFB)
-                                                  : Colors.white.withOpacity(
+                                                  : Colors.white.withValues(alpha:
                                                     0.9,
                                                   ),
 
                                           letterSpacing: 0.8,
                                         ),
                                       ),
+                                      if (hasCase) ...[
+                                        const SizedBox(height: 2),
+                                        Container(
+                                          width: 4,
+                                          height: 4,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF22C55E),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -1458,13 +1522,13 @@ class _HomePageState extends State<HomePage> {
                                             width: menuWidth,
                                             padding: const EdgeInsets.all(6),
                                             decoration: BoxDecoration(
-                                              color: Colors.white.withOpacity(
+                                              color: Colors.white.withValues(alpha: 
                                                 0.5,
                                               ),
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                               border: Border.all(
-                                                color: Colors.white.withOpacity(
+                                                color: Colors.white.withValues(alpha: 
                                                   0.7,
                                                 ),
                                                 width: 1.5,
@@ -1472,7 +1536,7 @@ class _HomePageState extends State<HomePage> {
                                               boxShadow: [
                                                 BoxShadow(
                                                   color: Colors.black
-                                                      .withOpacity(0.15),
+                                                      .withValues(alpha: 0.15),
                                                   blurRadius: 20,
                                                   offset: const Offset(0, 4),
                                                 ),
@@ -1514,7 +1578,7 @@ class _HomePageState extends State<HomePage> {
                                                           color:
                                                               isSelected
                                                                   ? Colors.blue
-                                                                      .withOpacity(
+                                                                      .withValues(alpha: 
                                                                         0.3,
                                                                       )
                                                                   : Colors
@@ -1528,7 +1592,7 @@ class _HomePageState extends State<HomePage> {
                                                                   ? Border.all(
                                                                     color: Colors
                                                                         .blue
-                                                                        .withOpacity(
+                                                                        .withValues(alpha: 
                                                                           0.5,
                                                                         ),
                                                                     width: 1.5,
@@ -1710,7 +1774,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'No cases found',
+                      _selectedDate != null
+                          ? 'No cases found for this date'
+                          : 'No cases found',
                       style: TextStyle(
                         fontSize: 16,
                         color:
@@ -1722,7 +1788,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Try adjusting your filters or search',
+                      _selectedDate != null
+                          ? 'Try another date'
+                          : 'Try adjusting your filters or search',
                       style: TextStyle(
                         fontSize: 14,
                         color:
@@ -1800,6 +1868,8 @@ class _HomePageState extends State<HomePage> {
                   symptoms: record.symptoms,
                   imagePaths: record.imagePaths,
                   predictions: record.predictions,
+                  createdAt: record.createdAt,
+                  updatedAt: record.updatedAt,
                   isPrePrediction: false, // Already has predictions
                 ),
           ),
@@ -1827,14 +1897,14 @@ class _HomePageState extends State<HomePage> {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            const Color(0xFF1976D2).withOpacity(0.9),
-                            const Color(0xFF1565C0).withOpacity(0.9),
+                            const Color(0xFF1976D2).withValues(alpha: 0.9),
+                            const Color(0xFF1565C0).withValues(alpha: 0.9),
                           ],
                         ),
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: (isDark ? Colors.white : Colors.black)
-                              .withOpacity(0.2),
+                              .withValues(alpha: 0.2),
                           width: 1.5,
                         ),
                       ),
@@ -1904,7 +1974,7 @@ class _HomePageState extends State<HomePage> {
                           // Handle uncertain action
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: statusColor.withOpacity(0.9),
+                          backgroundColor: statusColor.withValues(alpha: 0.9),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 18,
@@ -1939,10 +2009,10 @@ class _HomePageState extends State<HomePage> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.15),
+                      color: statusColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: statusColor.withOpacity(0.3),
+                        color: statusColor.withValues(alpha: 0.3),
                         width: 1.5,
                       ),
                     ),
@@ -2098,12 +2168,12 @@ class _HomePageState extends State<HomePage> {
             ? [
                 // Dark mode – outer glow + depth
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.6),
+                  color: Colors.black.withValues(alpha: 0.6),
                   blurRadius: 18,
                   offset: const Offset(4, 4),
                 ),
                 BoxShadow(
-                  color: Colors.white.withOpacity(0.08),
+                  color: Colors.white.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(-3, -3),
                 ),
@@ -2117,7 +2187,7 @@ class _HomePageState extends State<HomePage> {
                   offset: const Offset(4, 4),
                 ),
                 BoxShadow(
-                  color: Colors.white.withOpacity(0.9),
+                  color: Colors.white.withValues(alpha: 0.9),
                   blurRadius: 15,
                   spreadRadius: 1,
                   offset: const Offset(-4, -4),
@@ -2149,7 +2219,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-            child: Container(color: const Color.fromARGB(255, 223, 223, 223).withOpacity(0.25),
+            child: Container(color: const Color.fromARGB(255, 223, 223, 223).withValues(alpha: 0.25),
 ),
           ),
 
@@ -2293,7 +2363,7 @@ class _HomePageState extends State<HomePage> {
         boxShadow: [
           BoxShadow(
             
-        color: isDark ? Color.fromARGB(62, 255, 255, 255): Colors.black.withOpacity(0.08),
+        color: isDark ? Color.fromARGB(62, 255, 255, 255): Colors.black.withValues(alpha: 0.08),
             
             blurRadius: 5,
             offset: const Offset(0, 4),
@@ -2381,8 +2451,8 @@ class _HomePageState extends State<HomePage> {
                             boxShadow: [
                               BoxShadow(
                                 color: isDark
-                                ?const Color.fromARGB(255, 255, 255, 255).withOpacity(0.15)
-                                :const Color.fromARGB(255, 0, 0, 0).withOpacity(0.25),
+                                ?const Color.fromARGB(255, 255, 255, 255).withValues(alpha: 0.15)
+                                :const Color.fromARGB(255, 0, 0, 0).withValues(alpha: 0.25),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2),
                               ),

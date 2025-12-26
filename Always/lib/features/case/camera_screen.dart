@@ -1,4 +1,5 @@
 import 'dart:convert'; // สำหรับ jsonDecode
+import 'dart:developer';
 import 'dart:io'; // สำหรับ Platform check
 // สำหรับ File operations
 import 'package:camera/camera.dart';
@@ -13,7 +14,9 @@ import '../../app_state.dart';
 enum CameraStatus { tooDark, tooBright, focusing, good }
 
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({super.key});
+  const CameraScreen({super.key, this.caseId});
+
+  final String? caseId;
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -40,7 +43,7 @@ class _CameraScreenState extends State<CameraScreen> {
   // --- 1. ฟังก์ชันเริ่มการทำงานกล้อง ---
   Future<void> _initCamera() async {
     if (cameras.isEmpty) {
-      print('No cameras found');
+      log('No cameras found', name: 'CameraScreen');
       return;
     }
 
@@ -64,7 +67,11 @@ class _CameraScreenState extends State<CameraScreen> {
         })
         .catchError((Object e) {
           if (e is CameraException) {
-            print('Camera Error: ${e.code}');
+            log(
+              'Camera Error: ${e.code}',
+              name: 'CameraScreen',
+              error: e,
+            );
           }
         });
   }
@@ -89,7 +96,10 @@ class _CameraScreenState extends State<CameraScreen> {
 
     try {
       final uri = _buildCheckUri();
-      print("DEBUG: Connecting to URI: $uri (scheme: ${uri.scheme})");
+      log(
+        'DEBUG: Connecting to URI: $uri (scheme: ${uri.scheme})',
+        name: 'CameraScreen',
+      );
 
       var request = http.MultipartRequest('POST', uri);
       request.files.add(await http.MultipartFile.fromPath('file', imagePath));
@@ -115,7 +125,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body) as Map<String, dynamic>;
-        print("Server Response: $jsonResponse");
+        log('Server Response: $jsonResponse', name: 'CameraScreen');
 
         if (jsonResponse['status'] == 'success') {
           return jsonResponse;
@@ -131,13 +141,16 @@ class _CameraScreenState extends State<CameraScreen> {
           return null;
         }
       } else {
-        print("Server Error: ${response.statusCode} - ${response.body}");
+        log(
+          'Server Error: ${response.statusCode} - ${response.body}',
+          name: 'CameraScreen',
+        );
         return null;
       }
     } catch (e) {
       // ปิด Loading กรณี Error
       if (mounted) Navigator.of(context).pop();
-      print("Connection Error: $e");
+      log('Connection Error', name: 'CameraScreen', error: e);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -213,8 +226,18 @@ class _CameraScreenState extends State<CameraScreen> {
   Uri _buildCheckUri() {
     // Use shared config which handles URL sanitization (fixes htp://, https://, etc.)
     final uri = ApiConfig.checkImageUri;
-    print("DEBUG: Using API endpoint: $uri (base: ${ApiConfig.baseUrl})");
-    return uri;
+    final caseId = widget.caseId?.trim();
+    final resolved =
+        caseId == null || caseId.isEmpty
+            ? uri
+            : uri.replace(
+              queryParameters: {...uri.queryParameters, 'case_id': caseId},
+            );
+    log(
+      'DEBUG: Using API endpoint: $resolved (base: ${ApiConfig.baseUrl})',
+      name: 'CameraScreen',
+    );
+    return resolved;
   }
 
   Future<String?> _showMultiImageOptions() async {
@@ -426,7 +449,7 @@ class _CameraScreenState extends State<CameraScreen> {
       }
       // ถ้ารูปไม่ผ่าน (_checkImageWithPython return false) มันจะโชว์ SnackBar แจ้งเตือนเองแล้ว
     } catch (e) {
-      print(e);
+      log('Failed to take picture', name: 'CameraScreen', error: e);
     } finally {
       if (mounted) {
         setState(() {
@@ -574,10 +597,10 @@ class _CameraScreenState extends State<CameraScreen> {
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
+                          color: Colors.white.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Text(
@@ -658,7 +681,7 @@ class _CameraScreenState extends State<CameraScreen> {
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.9),
+                                color: Colors.red.withValues(alpha: 0.9),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: const Text(

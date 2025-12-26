@@ -101,7 +101,10 @@ class _SettingsPageState extends State<SettingsPage> {
       },
     );
 
-    if (result == true && mounted) {
+    if (!context.mounted) return;
+    if (result == true) {
+      // Clear user session data before navigating to login
+      appState.clearUserSession();
       Navigator.of(context).pushNamedAndRemoveUntil(Routes.login, (route) => false);
     }
   }
@@ -213,7 +216,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                               decoration: BoxDecoration(
                                                 color: appState.language == 'English'
                                                     ? const Color(0xFF1976D2)
-                                                        .withOpacity(0.3)
+                                                        .withValues(alpha: 0.3)
                                                     : Colors.transparent,
                                                 borderRadius: BorderRadius.circular(8),
                                                 border: appState.language == 'English'
@@ -250,7 +253,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                               decoration: BoxDecoration(
                                                 color: appState.language == 'Thai'
                                                     ? const Color(0xFF1976D2)
-                                                        .withOpacity(0.3)
+                                                        .withValues(alpha: 0.3)
                                                     : Colors.transparent,
                                                 borderRadius: BorderRadius.circular(8),
                                                 border: appState.language == 'Thai'
@@ -343,7 +346,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                           borderRadius: BorderRadius.circular(20),
                                           border: Border.all(
                                             color: (isDark ? Colors.white : Colors.black)
-                                                .withOpacity(0.3),
+                                                .withValues(alpha: 0.3),
                                             width: 1.5,
                                           ),
                                         ),
@@ -362,7 +365,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                                   shape: BoxShape.circle,
                                                   boxShadow: [
                                                     BoxShadow(
-                                                      color: Colors.black.withOpacity(0.2),
+                                                      color: Colors.black.withValues(alpha: 0.2),
                                                       blurRadius: 4,
                                                       offset: const Offset(0, 2),
                                                     ),

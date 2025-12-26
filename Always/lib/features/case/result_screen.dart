@@ -41,6 +41,15 @@ class _ResultScreenState extends State<ResultScreen> {
   // Per-image decision: Map of image index to decision
   final Map<int, String?> _imageDecisions = {};
   final TextEditingController _noteController = TextEditingController();
+  static const Map<String, String> _diagnosisLabelMap = {
+    'akiec': 'Actinic keratoses',
+    'bcc': 'Basal cell carcinoma',
+    'bkl': 'Benign keratosis-like lesions',
+    'df': 'Dermatofibroma',
+    'mel': 'Melanoma',
+    'nv': 'Melanocytic nevi',
+    'vasc': 'Vascular lesions',
+  };
 
   // For image carousel
   late PageController _imagePageController;
@@ -51,6 +60,26 @@ class _ResultScreenState extends State<ResultScreen> {
     if (confidence >= 0.7) return 'HIGH';
     if (confidence >= 0.4) return 'MODERATE';
     return 'LOW';
+  }
+
+  String _displayLabel(String? rawLabel) {
+    final trimmed = rawLabel?.trim();
+    if (trimmed == null || trimmed.isEmpty) return 'Unknown';
+    final mapped = _diagnosisLabelMap[trimmed.toLowerCase()];
+    if (mapped != null) return mapped;
+    final cleaned = trimmed.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    return _toTitleCase(cleaned);
+  }
+
+  String _toTitleCase(String input) {
+    return input
+        .split(RegExp(r'\s+'))
+        .map((word) {
+          if (word.isEmpty) return word;
+          final lower = word.toLowerCase();
+          return '${lower[0].toUpperCase()}${lower.substring(1)}';
+        })
+        .join(' ');
   }
 
   Color _getRiskColor(String risk) {
@@ -143,8 +172,9 @@ class _ResultScreenState extends State<ResultScreen> {
             ];
 
     final topConfidence = _topConfidenceForImage(_currentImageIndex);
-    final topLabel = _topPredictionForImage(_currentImageIndex)?['label'] ??
-        'Unknown';
+    final topLabel = _displayLabel(
+      _topPredictionForImage(_currentImageIndex)?['label'] as String?,
+    );
     final riskLevel = _getRiskLevel(topConfidence);
     final currentPredictions = _predictionsForImage(_currentImageIndex);
 
@@ -173,7 +203,8 @@ class _ResultScreenState extends State<ResultScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
-              color: (isDark ? Colors.black : Colors.white).withOpacity(0.5),
+              color: (isDark ? Colors.black : Colors.white)
+                  .withValues(alpha: 0.5),
             ),
           ),
         ),
@@ -310,7 +341,7 @@ class _ResultScreenState extends State<ResultScreen> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
@@ -347,7 +378,8 @@ class _ResultScreenState extends State<ResultScreen> {
             const SizedBox(height: 8),
             ...predictions.take(3).toList().asMap().entries.map((entry) {
               final pred = entry.value;
-              final predLabel = pred['label'] ?? '-';
+              final predLabel =
+                  _displayLabel(pred['label'] as String?);
               final predConf =
                   ((pred['confidence'] as num?)?.toDouble() ?? 0.0) * 100;
               final predRisk = _getRiskLevel(predConf / 100);
@@ -359,7 +391,7 @@ class _ResultScreenState extends State<ResultScreen> {
                       width: 24,
                       height: 24,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
+                        color: Colors.white.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -508,9 +540,10 @@ class _ResultScreenState extends State<ResultScreen> {
                             },
                             itemBuilder: (context, index) {
                               final imagePreds = _predictionsForImage(index);
-                              final imageTopLabel =
-                                  _topPredictionForImage(index)?['label'] ??
-                                  'Unknown';
+                              final imageTopLabel = _displayLabel(
+                                _topPredictionForImage(index)?['label']
+                                    as String?,
+                              );
                               final imageTopConf =
                                   _topConfidenceForImage(index) * 100;
                               return Column(
@@ -545,7 +578,7 @@ class _ResultScreenState extends State<ResultScreen> {
                                             ),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: Colors.black.withOpacity(0.25),
+                                                color: Colors.black.withValues(alpha: 0.25),
                                                 blurRadius: 12,
                                                 offset: const Offset(0, 6),
                                               ),
@@ -591,7 +624,8 @@ class _ResultScreenState extends State<ResultScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   ...imagePreds.take(3).map((pred) {
-                                    final label = pred['label'] ?? '-';
+                                    final label =
+                                        _displayLabel(pred['label'] as String?);
                                     final conf =
                                         ((pred['confidence'] as num?)?.toDouble() ??
                                             0.0) *
@@ -604,7 +638,8 @@ class _ResultScreenState extends State<ResultScreen> {
                                           Container(
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                             decoration: BoxDecoration(
-                                              color: (isDark ? Colors.white : Colors.black).withOpacity(0.06),
+                                              color: (isDark ? Colors.white : Colors.black)
+                                                  .withValues(alpha: 0.06),
                                               borderRadius: BorderRadius.circular(10),
                                             ),
                                             child: Text(
@@ -651,7 +686,7 @@ class _ResultScreenState extends State<ResultScreen> {
                                   decoration: BoxDecoration(
                                     color:
                                         isDark
-                                            ? Colors.white.withOpacity(0.08)
+                                            ? Colors.white.withValues(alpha: 0.08)
                                             : Colors.grey[100],
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(color: Colors.grey.shade300),
@@ -711,7 +746,7 @@ class _ResultScreenState extends State<ResultScreen> {
                                       vertical: 5,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.5),
+                                      color: Colors.black.withValues(alpha: 0.5),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
@@ -788,7 +823,9 @@ class _ResultScreenState extends State<ResultScreen> {
             hintStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
             filled: true,
             fillColor:
-                isDark ? Colors.white.withOpacity(0.08) : Colors.grey[100],
+                isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.grey[100],
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: Colors.grey.shade300),
@@ -815,7 +852,7 @@ class _ResultScreenState extends State<ResultScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
@@ -883,7 +920,7 @@ class _ResultScreenState extends State<ResultScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? Colors.black.withOpacity(0.5) : Colors.white,
+        color: isDark ? Colors.black.withValues(alpha: 0.5) : Colors.white,
         border: Border(top: BorderSide(color: Colors.grey.shade300)),
       ),
       child: Column(

@@ -113,10 +113,21 @@ class _LoginFormState extends State<LoginForm> {
     setState(() => _isLoading = false);
 
     final username = usernameController.text;
+
+    // Clear previous user session before loading new user
+    appState.clearUserSession();
+
+    // Set userId first (required for user-specific data loading)
+    appState.setUserId(username);
+
+    // Set initial values from credentials CSV
     appState.setFirstName(_firstNames[username] ?? '');
     appState.setLastName(_lastNames[username] ?? '');
     appState.setUserRole(_roles[username] ?? '');
-    appState.setUserId(username);
+
+    // Load user-specific persisted data (profile image, custom names)
+    // This will override CSV values if user has saved custom names
+    await appState.loadUserData();
 
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed(
@@ -268,7 +279,7 @@ class _LoginFormState extends State<LoginForm> {
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.15),
+                    color: const Color.fromARGB(255, 0, 0, 0).withValues(alpha: 0.15),
                     blurRadius: 6,
                     offset: const Offset(0, 8),
                   ),
@@ -283,7 +294,7 @@ class _LoginFormState extends State<LoginForm> {
                     255,
                     255,
                     255,
-                  ).withOpacity(0.25),
+                  ).withValues(alpha: 0.25),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                     side: const BorderSide(color: Colors.white, width: 1),
@@ -343,7 +354,7 @@ class _LoginFormState extends State<LoginForm> {
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 6,
                     offset: const Offset(0, 8),
                   ),

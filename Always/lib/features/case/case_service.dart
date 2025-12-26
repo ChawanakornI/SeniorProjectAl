@@ -19,6 +19,7 @@ class CaseRecord {
   final List<String> symptoms;
   final List<String> imagePaths; // Paths to captured images
   final String? createdAt;
+  final String? updatedAt;
 
   CaseRecord({
     required this.caseId,
@@ -32,6 +33,7 @@ class CaseRecord {
     this.symptoms = const [],
     this.imagePaths = const [],
     this.createdAt,
+    this.updatedAt,
   });
 
   factory CaseRecord.fromJson(Map<String, dynamic> json) {
@@ -71,6 +73,7 @@ class CaseRecord {
               .toList() ??
           [],
       createdAt: json['created_at'] as String?,
+      updatedAt: json['updated_at'] as String?,
     );
   }
 

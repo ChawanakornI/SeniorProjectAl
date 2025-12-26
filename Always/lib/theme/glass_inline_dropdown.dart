@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'glass.dart';
 
 class GlassInlineDropdown extends StatefulWidget {
   final String label;
@@ -71,11 +70,11 @@ class _GlassInlineDropdownState extends State<GlassInlineDropdown>
   @override
   Widget build(BuildContext context) {
     final bgColor = widget.isDark
-        ? Colors.white.withOpacity(0.08)
-        : Colors.white.withOpacity(0.6);
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.white.withValues(alpha: 0.6);
 
     final borderColor = widget.isDark
-        ? Colors.white.withOpacity(0.2)
+        ? Colors.white.withValues(alpha: 0.2)
         : Colors.grey.shade300;
 
     final textColor =
@@ -183,21 +182,21 @@ class _GlassInlineDropdownState extends State<GlassInlineDropdown>
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: widget.isDark
-                            ? Colors.white.withOpacity(0.08)
-                            : Colors.white.withOpacity(0.6),
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.white.withValues(alpha: 0.6),
                         borderRadius: const BorderRadius.only(
                           bottomLeft: Radius.circular(10),
                           bottomRight: Radius.circular(10),
                         ),
                         border: Border.all(
                           color: widget.isDark
-                              ? Colors.white.withOpacity(0.2)
+                              ? Colors.white.withValues(alpha: 0.2)
                               : Colors.grey.shade300,
                           width: 1.2,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(widget.isDark ? 0.25 : 0.1),
+                            color: Colors.black.withValues(alpha: widget.isDark ? 0.25 : 0.1),
                             blurRadius: 20,
                             spreadRadius: 0,
                             offset: const Offset(0, 8),
@@ -227,7 +226,7 @@ class _GlassInlineDropdownState extends State<GlassInlineDropdown>
                                 decoration: BoxDecoration(
                                   color: isSelected
                                       ? (widget.isDark 
-                                          ? Colors.white.withOpacity(0.15)
+                                          ? Colors.white.withValues(alpha: 0.15)
                                           : Colors.grey.shade200)
                                       : Colors.transparent,
                                   borderRadius: BorderRadius.circular(8),
@@ -276,4 +275,3 @@ class _GlassInlineDropdownState extends State<GlassInlineDropdown>
 
 
   
-

@@ -19,13 +19,12 @@ class ProfileSettingsPage extends StatefulWidget {
 class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
-  File? _profileImage;
   final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    // Initialize with default values (you can load from shared preferences or state management)
+    // Initialize with default values from AppState
     _firstNameController.text = appState.firstName;
     _lastNameController.text = appState.lastName;
     _firstNameController.addListener(() {
@@ -52,10 +51,22 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
         imageQuality: 85,
       );
       if (image != null) {
-        setState(() {
-          _profileImage = File(image.path);
-        });
+        // Save to AppState with persistence
+        await appState.setProfileImage(File(image.path));
         HapticFeedback.lightImpact();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              appState.translate(
+                'Profile picture updated!',
+                'อัปเดตรูปโปรไฟล์แล้ว!',
+              ),
+            ),
+            backgroundColor: const Color(0xFF22C55E),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -78,6 +89,34 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
     }
   }
 
+  Future<void> _deleteProfileImage() async {
+    try {
+      await appState.deleteProfileImage();
+      HapticFeedback.lightImpact();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            appState.translate(
+              'Profile picture deleted!',
+              'ลบรูปโปรไฟล์แล้ว!',
+            ),
+          ),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting image: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _showImageSourceDialog() {
     showDialog(
       context: context,
@@ -91,10 +130,10 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
               child: Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
+                  color: Colors.white.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     width: 1.5,
                   ),
                 ),
@@ -155,10 +194,10 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.6),
+              color: Colors.white.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Colors.white.withOpacity(0.8),
+                color: Colors.white.withValues(alpha: 0.8),
                 width: 1.5,
               ),
             ),
@@ -252,12 +291,15 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
               ),
               // Content
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      // Profile Picture Section
-                      ClipRRect(
+                child: ListenableBuilder(
+                  listenable: appState,
+                  builder: (context, _) {
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        children: [
+                          // Profile Picture Section
+                          ClipRRect(
                         borderRadius: BorderRadius.circular(20),
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -288,16 +330,16 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                                         decoration: glassBox(isDark, radius: 20, highlight: true).copyWith(
                                           border: Border.all(
                                             color: (isDark ? Colors.white : Colors.black)
-                                                .withOpacity(0.3),
+                                                .withValues(alpha: 0.3),
                                             width: 3,
                                           ),
                                         ),
-                                        child: _profileImage != null
+                                        child: appState.profileImageFile != null
                                             ? Stack(
                                                 fit: StackFit.expand,
                                                 children: [
                                                   Image.file(
-                                                    _profileImage!,
+                                                    appState.profileImageFile!,
                                                     fit: BoxFit.cover,
                                                   ),
                                                   Positioned(
@@ -327,8 +369,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                                                 decoration: glassCircle(isDark, highlight: true).copyWith(
                                                   gradient: LinearGradient(
                                                     colors: [
-                                                      const Color(0xFF38BDF8).withOpacity(0.35),
-                                                      const Color(0xFF6366F1).withOpacity(0.35),
+                                                      const Color(0xFF38BDF8).withValues(alpha: 0.35),
+                                                      const Color(0xFF6366F1).withValues(alpha: 0.35),
                                                     ],
                                                     begin: Alignment.topLeft,
                                                     end: Alignment.bottomRight,
@@ -417,6 +459,33 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                                     ),
                                   ],
                                 ),
+                                if (appState.profileImageFile != null) ...[
+                                  const SizedBox(height: 12),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                                      child: InkWell(
+                                        onTap: _deleteProfileImage,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          decoration: glassBox(isDark, radius: 12, highlight: true),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: const [
+                                              Icon(Icons.delete_outline, size: 18, color: Color(0xFFEF4444)),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Delete picture',
+                                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -526,24 +595,29 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                             child: ElevatedButton(
-                              onPressed: () {
+                              onPressed: () async {
                                 HapticFeedback.mediumImpact();
-                              appState.setFirstName(_firstNameController.text);
-                              appState.setLastName(_lastNameController.text);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    appState.translate(
-                                      'Settings saved successfully!',
-                                      'บันทึกการตั้งค่าสำเร็จ!',
+                                appState.setFirstName(_firstNameController.text);
+                                appState.setLastName(_lastNameController.text);
+
+                                // Persist names to SharedPreferences
+                                await appState.persistNames();
+
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      appState.translate(
+                                        'Settings saved successfully!',
+                                        'บันทึกการตั้งค่าสำเร็จ!',
+                                      ),
                                     ),
+                                    backgroundColor: const Color(0xFF1976D2),
                                   ),
-                                  backgroundColor: const Color(0xFF1976D2),
-                                ),
-                              );
+                                );
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1976D2).withOpacity(0.9),
+                                backgroundColor: const Color(0xFF1976D2).withValues(alpha: 0.9),
                                 foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
@@ -565,8 +639,10 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
             ],

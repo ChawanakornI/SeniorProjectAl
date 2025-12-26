@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 // Reusable glassmorphism helpers to keep dark mode surfaces consistent
 BoxDecoration glassBox(bool isDark, {double radius = 16, bool highlight = false}) {
   final darkGradient = [
-    const Color(0xFF0B1628).withOpacity(0.82),
-    const Color(0xFF0E1F35).withOpacity(0.76),
+    const Color(0xFF0B1628).withValues(alpha: 0.82),
+    const Color(0xFF0E1F35).withValues(alpha: 0.76),
   ];
   final lightGradient = [
-    Colors.white.withOpacity(0.92),
-    Colors.white.withOpacity(0.86),
+    Colors.white.withValues(alpha: 0.92),
+    Colors.white.withValues(alpha: 0.86),
   ];
 
   return BoxDecoration(
@@ -19,12 +19,12 @@ BoxDecoration glassBox(bool isDark, {double radius = 16, bool highlight = false}
     ),
     borderRadius: BorderRadius.circular(radius),
     border: Border.all(
-      color: isDark ? Colors.white.withOpacity(0.14) : Colors.black.withOpacity(0.06),
+      color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.06),
       width: 1.4,
     ),
     boxShadow: [
   BoxShadow(
-    color: Colors.black.withOpacity(0.2),
+    color: Colors.black.withValues(alpha: 0.2),
     blurRadius: 4,
     offset: Offset(0, 0.5),
   ),
@@ -55,7 +55,7 @@ required bool isDark,
 
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withOpacity(0.1),
+        color: Colors.black.withValues(alpha: 0.1),
         blurRadius: 8,
         offset: const Offset(0, 4),
       ),
@@ -78,7 +78,7 @@ BoxDecoration glassSearchBox({
 
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withOpacity(0.1),
+        color: Colors.black.withValues(alpha: 0.1),
         blurRadius: 8,
         offset: const Offset(0, 4),
       ),
@@ -95,8 +95,8 @@ BoxDecoration glassSearchFilter({
     color: const Color.fromARGB(255, 0, 0, 0),
     border: Border.all(
       color: isDark
-          ? Colors.white.withOpacity(0.12)
-          : Colors.black.withOpacity(0.08),
+          ? Colors.white.withValues(alpha: 0.12)
+          : Colors.black.withValues(alpha: 0.08),
       width: 1,
     ),
   );
@@ -111,13 +111,13 @@ BoxDecoration glassCalendar(bool isDark, {double radius = 16}) {
     borderRadius: BorderRadius.circular(radius),
     border: Border.all(
       color: isDark
-          ? Colors.black.withOpacity(0.08)
-          : Colors.black.withOpacity(0.08),
+          ? Colors.black.withValues(alpha: 0.08)
+          : Colors.black.withValues(alpha: 0.08),
       width: 1.2,
     ),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
+        color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
         blurRadius: 20,
         offset: const Offset(0, 8),
       ),
@@ -136,21 +136,21 @@ BoxDecoration modalBox(bool isDark, {double radius = 18}) {
     boxShadow: [
       /// 🌫 Main drop shadow (depth)
       BoxShadow(
-        color: Colors.black.withOpacity(0.45),
+        color: Colors.black.withValues(alpha: 0.45),
         blurRadius: 10,
         spreadRadius: 2,
         offset: const Offset(0, 8),
       ),
 
       BoxShadow(
-        color: Colors.black.withOpacity(0.25),
+        color: Colors.black.withValues(alpha: 0.25),
         blurRadius: 60,
         offset: const Offset(0, 8),
       ),
 
       if (isDark)
         BoxShadow(
-          color: const Color(0xFFFBFBFB).withOpacity(0.08),
+          color: const Color(0xFFFBFBFB).withValues(alpha: 0.08),
           blurRadius: 10,
           spreadRadius: 2,
           offset: const Offset(0, 8),
@@ -158,7 +158,7 @@ BoxDecoration modalBox(bool isDark, {double radius = 18}) {
 
       if (isDark)
         BoxShadow(
-          color: const Color(0xFFFBFBFB).withOpacity(0.04),
+          color: const Color(0xFFFBFBFB).withValues(alpha: 0.04),
           blurRadius: 60,
           offset: const Offset(0, 8),
         ),
@@ -174,15 +174,15 @@ bool highlight = true,
 }) {
   return BoxDecoration(
     color: isDark
-        ? Colors.white.withOpacity(0.10)     // Dark mode
+        ? Colors.white.withValues(alpha: 0.10)     // Dark mode
         : const Color(0xFFFBFBFB), // Light mode
 
     borderRadius: BorderRadius.circular(radius),
 
     border: Border.all(
       color: isDark
-          ? Colors.white.withOpacity(0.20)
-          : Colors.black.withOpacity(0.08),
+          ? Colors.white.withValues(alpha: 0.20)
+          : Colors.black.withValues(alpha: 0.08),
       width: 1.2,
     ),
 
@@ -193,8 +193,8 @@ bool highlight = true,
 BoxDecoration glassCoverCalendar(bool isDark, {double radius = 16, bool highlight = false}) {
   
   final lightGradient = [
-    Colors.white.withOpacity(0.92),
-    Colors.white.withOpacity(0.86),
+    Colors.white.withValues(alpha: 0.92),
+    Colors.white.withValues(alpha: 0.86),
   ];
 
   return BoxDecoration(
@@ -205,12 +205,12 @@ BoxDecoration glassCoverCalendar(bool isDark, {double radius = 16, bool highligh
     ),
     borderRadius: BorderRadius.circular(radius),
     border: Border.all(
-      color: isDark ? Colors.white.withOpacity(0.14) : Colors.black.withOpacity(0.06),
+      color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.06),
       width: 1.4,
     ),
     boxShadow: [
   BoxShadow(
-    color: Colors.black.withOpacity(0.2),
+    color: Colors.black.withValues(alpha: 0.2),
     blurRadius: 4,
     offset: Offset(0, 0.5),
   ),
@@ -226,8 +226,8 @@ BoxDecoration glassFilter(bool isDark, {double radius = 16, bool highlight = fal
     const Color.fromARGB(255, 0, 0, 0),
   ];
   final lightGradient = [
-    Colors.white.withOpacity(0.92),
-    Colors.white.withOpacity(0.86),
+    Colors.white.withValues(alpha: 0.92),
+    Colors.white.withValues(alpha: 0.86),
   ];
 
   return BoxDecoration(
@@ -238,12 +238,12 @@ BoxDecoration glassFilter(bool isDark, {double radius = 16, bool highlight = fal
     ),
     borderRadius: BorderRadius.circular(radius),
     border: Border.all(
-      color: isDark ? Colors.white.withOpacity(0.14) : Colors.black.withOpacity(0.06),
+      color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.06),
       width: 1.4,
     ),
     boxShadow: [
   BoxShadow(
-    color: Colors.black.withOpacity(0.2),
+    color: Colors.black.withValues(alpha: 0.2),
     blurRadius: 4,
     offset: Offset(0, 0.5),
   ),
@@ -259,8 +259,8 @@ BoxDecoration glassCase(bool isDark, {double radius = 16, bool highlight = false
     const Color(0xFF282828),
   ];
   final lightGradient = [
-    Colors.white.withOpacity(0.92),
-    Colors.white.withOpacity(0.86),
+    Colors.white.withValues(alpha: 0.92),
+    Colors.white.withValues(alpha: 0.86),
   ];
 
   return BoxDecoration(
@@ -271,12 +271,12 @@ BoxDecoration glassCase(bool isDark, {double radius = 16, bool highlight = false
     ),
     borderRadius: BorderRadius.circular(radius),
     border: Border.all(
-      color: isDark ? Colors.white.withOpacity(0.14) : Colors.black.withOpacity(0.06),
+      color: isDark ? Colors.white.withValues(alpha: 0.14) : Colors.black.withValues(alpha: 0.06),
       width: 1.4,
     ),
     boxShadow: [
   BoxShadow(
-    color: Colors.black.withOpacity(0.2),
+    color: Colors.black.withValues(alpha: 0.2),
     blurRadius: 4,
     offset: Offset(0, 0.5),
   ),
