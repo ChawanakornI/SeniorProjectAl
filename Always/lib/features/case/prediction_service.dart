@@ -36,6 +36,7 @@ class PredictionService {
       
       request.headers.addAll(
         ApiConfig.buildHeaders(
+          token: appState.accessToken,
           userId: appState.userId,
           userRole: appState.userRole,
         ),

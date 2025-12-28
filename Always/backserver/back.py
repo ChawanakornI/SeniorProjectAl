@@ -13,10 +13,20 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 
+from . import auth
 from . import config
 from . import crypto_utils
 from .model import model_service
-from .schemas import CheckImageResponse, CaseLog, CaseUpdate, RejectCase, CaseIdRelease
+from .schemas import (
+    CheckImageResponse,
+    CaseLog,
+    CaseUpdate,
+    RejectCase,
+    CaseIdRelease,
+    LoginRequest,
+    TokenResponse,
+    UserInfo,
+)
 
 app = FastAPI()
 
@@ -59,12 +69,23 @@ def _role_allows_global_access(user_role: str) -> bool:
 
 
 def get_user_context(
+    authorization: Optional[str] = Header(default=None),
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     x_user_role: Optional[str] = Header(default=None, alias="X-User-Role"),
 ) -> Dict[str, str]:
+    """
+    Extract user context from JWT token or legacy headers.
+    Prefers JWT token if Authorization header is present.
+    Falls back to X-User-Id/X-User-Role headers for backward compatibility.
+    """
+    # Try JWT token first
+    if authorization and authorization.lower().startswith("bearer "):
+        return auth.get_current_user(authorization)
+
+    # Fall back to legacy headers
     user_id = _normalize_user_id(x_user_id)
     if not user_id:
-        raise HTTPException(status_code=400, detail="Missing X-User-Id header")
+        raise HTTPException(status_code=400, detail="Missing Authorization header or X-User-Id header")
     user_role = (x_user_role or "").strip().lower()
     return {"user_id": user_id, "user_role": user_role}
 
@@ -449,6 +470,37 @@ def _should_include_entry(
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+async def login(payload: LoginRequest):
+    """
+    Authenticate user and return JWT access token.
+    """
+    user = auth.authenticate_user(payload.username, payload.password)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password",
+        )
+
+    access_token = auth.create_access_token(
+        user_id=payload.username,
+        user_role=user.get("role", ""),
+        first_name=user.get("first_name", ""),
+        last_name=user.get("last_name", ""),
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserInfo(
+            user_id=payload.username,
+            first_name=user.get("first_name", ""),
+            last_name=user.get("last_name", ""),
+            role=user.get("role", ""),
+        ),
+    )
 
 
 @app.post("/cases/next-id", dependencies=[Depends(require_api_key)])

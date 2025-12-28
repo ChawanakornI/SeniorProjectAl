@@ -11,6 +11,7 @@ class AppState extends ChangeNotifier {
   String _userId = '';
   String _userRole = ''; // 'gp', 'doctor', etc.
   String? _profileImagePath;
+  String? _accessToken; // JWT access token
 
   String get language => _language;
   bool get isDarkMode => _isDarkMode;
@@ -19,6 +20,7 @@ class AppState extends ChangeNotifier {
   String get userId => _userId;
   String get userRole => _userRole;
   String? get profileImagePath => _profileImagePath;
+  String? get accessToken => _accessToken;
   File? get profileImageFile => _profileImagePath != null ? File(_profileImagePath!) : null;
   String get displayName {
     final parts = [firstName.trim(), lastName.trim()].where((p) => p.isNotEmpty).toList();
@@ -35,6 +37,11 @@ class AppState extends ChangeNotifier {
 
   void setUserId(String value) {
     _userId = value;
+    notifyListeners();
+  }
+
+  void setAccessToken(String? token) {
+    _accessToken = token;
     notifyListeners();
   }
 
@@ -65,6 +72,7 @@ class AppState extends ChangeNotifier {
     _userId = '';
     _userRole = '';
     _profileImagePath = null;
+    _accessToken = null;
     notifyListeners();
   }
 

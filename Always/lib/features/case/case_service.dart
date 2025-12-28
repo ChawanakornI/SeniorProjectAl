@@ -114,6 +114,7 @@ class CaseService {
       log('Calling: $uri', name: 'CaseService');
 
       final headers = ApiConfig.buildHeaders(
+        token: appState.accessToken,
         userId: appState.userId,
         userRole: appState.userRole,
       );
@@ -160,6 +161,7 @@ class CaseService {
 
     try {
       final headers = ApiConfig.buildHeaders(
+        token: appState.accessToken,
         userId: appState.userId,
         userRole: appState.userRole,
       );
@@ -198,6 +200,7 @@ class CaseService {
     try {
       final headers = ApiConfig.buildHeaders(
         json: true,
+        token: appState.accessToken,
         userId: appState.userId,
         userRole: appState.userRole,
       );
@@ -245,6 +248,7 @@ class CaseService {
     try {
       final headers = ApiConfig.buildHeaders(
         json: true,
+        token: appState.accessToken,
         userId: appState.userId,
         userRole: appState.userRole,
       );
@@ -307,6 +311,7 @@ class CaseService {
     try {
       final headers = ApiConfig.buildHeaders(
         json: true,
+        token: appState.accessToken,
         userId: appState.userId,
         userRole: appState.userRole,
       );
@@ -350,6 +355,7 @@ class CaseService {
     try {
       final headers = ApiConfig.buildHeaders(
         json: true,
+        token: appState.accessToken,
         userId: appState.userId,
         userRole: appState.userRole,
       );

@@ -57,7 +57,10 @@ class ApiConfig {
   /// Reject case endpoint
   static Uri get rejectCaseUri => Uri.parse('$baseUrl/cases/reject');
 
-  /// User context headers
+  /// Authentication login endpoint
+  static Uri get authLoginUri => Uri.parse('$baseUrl/auth/login');
+
+  /// User context headers (legacy - kept for backward compatibility)
   static const String userIdHeader = 'X-User-Id';
   static const String userRoleHeader = 'X-User-Role';
 
@@ -67,8 +70,11 @@ class ApiConfig {
       : String.fromEnvironment('API_KEY');
 
   /// Build headers with API key and optional user context.
+  /// If [token] is provided, uses Bearer token authentication.
+  /// Otherwise falls back to legacy X-User-Id/X-User-Role headers.
   static Map<String, String> buildHeaders({
     bool json = false,
+    String? token,
     String? userId,
     String? userRole,
   }) {
@@ -79,11 +85,17 @@ class ApiConfig {
     if (apiKey != null) {
       headers['X-API-Key'] = apiKey!;
     }
-    if (userId != null && userId.trim().isNotEmpty) {
-      headers[userIdHeader] = userId.trim();
-    }
-    if (userRole != null && userRole.trim().isNotEmpty) {
-      headers[userRoleHeader] = userRole.trim();
+    // Prefer Bearer token if available
+    if (token != null && token.trim().isNotEmpty) {
+      headers['Authorization'] = 'Bearer ${token.trim()}';
+    } else {
+      // Fall back to legacy headers
+      if (userId != null && userId.trim().isNotEmpty) {
+        headers[userIdHeader] = userId.trim();
+      }
+      if (userRole != null && userRole.trim().isNotEmpty) {
+        headers[userRoleHeader] = userRole.trim();
+      }
     }
     return headers;
   }

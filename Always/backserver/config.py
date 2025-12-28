@@ -39,3 +39,11 @@ ENCRYPT_STORAGE: bool = os.getenv("ENCRYPT_STORAGE", "").strip().lower() in ("1"
 DATA_ENCRYPTION_KEY: str = os.getenv("DATA_ENCRYPTION_KEY", "").strip()
 TLS_CERT_FILE: str = os.getenv("TLS_CERT_FILE", "").strip()
 TLS_KEY_FILE: str = os.getenv("TLS_KEY_FILE", "").strip()
+
+# JWT Authentication settings
+JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_EXPIRATION_HOURS: int = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
+
+# User storage file path
+USERS_FILE: str = os.getenv("USERS_FILE", os.path.join(os.path.dirname(__file__), "users.json"))

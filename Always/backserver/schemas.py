@@ -95,6 +95,28 @@ class RejectCase(BaseModel):
     created_at: Optional[str] = None
 
 
+# Authentication schemas
+class LoginRequest(BaseModel):
+    """Request body for login endpoint."""
+    username: str
+    password: str
+
+
+class UserInfo(BaseModel):
+    """User information returned after login."""
+    user_id: str
+    first_name: str
+    last_name: str
+    role: str
+
+
+class TokenResponse(BaseModel):
+    """Response from login endpoint."""
+    access_token: str
+    token_type: str = "bearer"
+    user: UserInfo
+
+
 # Role-based access permissions
 ROLE_PERMISSIONS = {
     UserRole.GP: {

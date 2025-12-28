@@ -1,10 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../routes.dart';
 import '../../../app_state.dart';
+import '../../../services/auth_service.dart';
 
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key});
@@ -23,15 +25,11 @@ class _LoginFormState extends State<LoginForm> {
   bool _rememberMe = false;
   String? _errorText;
 
-  final Map<String, String> _credentials = {};
-  final Map<String, String> _roles = {};
-  final Map<String, String> _firstNames = {};
-  final Map<String, String> _lastNames = {};
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
-    _loadCredentials();
     _loadRemembered();
   }
 
@@ -54,36 +52,6 @@ class _LoginFormState extends State<LoginForm> {
     });
   }
 
-  Future<void> _loadCredentials() async {
-    try {
-      final csv = await rootBundle.loadString('assets/mock_credentials.csv');
-      for (final rawLine in csv.split('\n')) {
-        final line = rawLine.trim();
-        if (line.isEmpty ||
-            line.startsWith('#') ||
-            line.toLowerCase().startsWith('username')) {
-          continue;
-        }
-        final parts = line.split(',');
-        if (parts.length < 4) continue;
-
-        final username = parts[0].trim();
-        final password = parts[1].trim();
-        final firstName = parts[2].trim();
-        final lastName = parts[3].trim();
-        final role = parts.length >= 5 ? parts[4].trim().toLowerCase() : '';
-
-        _credentials[username] = password;
-        _roles[username] = role;
-        _firstNames[username] = firstName;
-        _lastNames[username] = lastName;
-      }
-      setState(() {});
-    } catch (_) {
-      setState(() => _errorText = 'Unable to load credentials');
-    }
-  }
-
   void _onLoginPressed() async {
     setState(() => _errorText = null);
 
@@ -92,47 +60,59 @@ class _LoginFormState extends State<LoginForm> {
       return;
     }
 
-    final storedPassword = _credentials[usernameController.text];
-    if (storedPassword == null || storedPassword != passwordController.text) {
-      setState(() => _errorText = 'Invalid Username or Password');
-      return;
-    }
-
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 2));
 
-    final prefs = await SharedPreferences.getInstance();
-    if (_rememberMe) {
-      await prefs.setBool('remember_me', true);
-      await prefs.setString('remembered_username', usernameController.text);
-    } else {
-      await prefs.remove('remember_me');
-      await prefs.remove('remembered_username');
+    try {
+      // Authenticate with backend
+      final response = await _authService.login(
+        usernameController.text,
+        passwordController.text,
+      );
+
+      // Save remember me preference
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setBool('remember_me', true);
+        await prefs.setString('remembered_username', usernameController.text);
+      } else {
+        await prefs.remove('remember_me');
+        await prefs.remove('remembered_username');
+      }
+
+      // Clear previous user session before loading new user
+      appState.clearUserSession();
+
+      // Set user data from login response
+      appState.setUserId(response.user.userId);
+      appState.setFirstName(response.user.firstName);
+      appState.setLastName(response.user.lastName);
+      appState.setUserRole(response.user.role);
+      appState.setAccessToken(response.accessToken);
+
+      // Load user-specific persisted data (profile image, custom names)
+      await appState.loadUserData();
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacementNamed(
+        response.user.role == 'gp' ? Routes.gpHome : Routes.home,
+      );
+    } on SocketException {
+      setState(() => _errorText = 'Cannot connect to server. Please check your network.');
+    } catch (e) {
+      String message = e.toString();
+      if (message.contains('Invalid username or password')) {
+        message = 'Invalid Username or Password';
+      } else if (message.contains('Connection refused')) {
+        message = 'Cannot connect to server';
+      } else {
+        message = 'Login failed. Please try again.';
+      }
+      setState(() => _errorText = message);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-
-    setState(() => _isLoading = false);
-
-    final username = usernameController.text;
-
-    // Clear previous user session before loading new user
-    appState.clearUserSession();
-
-    // Set userId first (required for user-specific data loading)
-    appState.setUserId(username);
-
-    // Set initial values from credentials CSV
-    appState.setFirstName(_firstNames[username] ?? '');
-    appState.setLastName(_lastNames[username] ?? '');
-    appState.setUserRole(_roles[username] ?? '');
-
-    // Load user-specific persisted data (profile image, custom names)
-    // This will override CSV values if user has saved custom names
-    await appState.loadUserData();
-
-    if (!mounted) return;
-    Navigator.of(context).pushReplacementNamed(
-      (_roles[username] ?? '') == 'gp' ? Routes.gpHome : Routes.home,
-    );
   }
 
   void _onGoogleSignIn() {

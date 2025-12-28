@@ -46,6 +46,7 @@ dependencies:
   path_provider: ^2.1.1
   http: ^1.1.0
   image: ^4.1.7
+  flutter_secure_storage: ^9.2.2
 
 dev_dependencies:
   flutter_test:
