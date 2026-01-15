@@ -6,7 +6,8 @@ from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-
+import subprocess
+from fastapi.staticfiles import StaticFiles
 import cv2
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Depends
@@ -16,13 +17,17 @@ from PIL import Image
 from . import auth
 from . import config
 from . import crypto_utils
-from .model import model_service
+from .model import ModelService
+
+from .AL import get_active_learning_candidates
+from .retrain_model import get_retrain_status
 from .schemas import (
     CheckImageResponse,
     CaseLog,
     CaseUpdate,
     RejectCase,
     CaseIdRelease,
+    LabelSubmission,
     LoginRequest,
     TokenResponse,
     UserInfo,
@@ -78,11 +83,9 @@ def get_user_context(
     Prefers JWT token if Authorization header is present.
     Falls back to X-User-Id/X-User-Role headers for backward compatibility.
     """
-    # Try JWT token first
     if authorization and authorization.lower().startswith("bearer "):
         return auth.get_current_user(authorization)
 
-    # Fall back to legacy headers
     user_id = _normalize_user_id(x_user_id)
     if not user_id:
         raise HTTPException(status_code=400, detail="Missing Authorization header or X-User-Id header")
@@ -234,6 +237,18 @@ def _read_all_metadata_entries() -> List[Dict[str, Any]]:
     if legacy_metadata_path.exists():
         entries.extend(_read_metadata_entries(legacy_metadata_path))
     return entries
+
+
+def _count_rejected_labeled_images(entries: List[Dict[str, Any]]) -> int:
+    count = 0
+    for entry in entries:
+        if entry.get("entry_type") != "reject":
+            continue
+        if not entry.get("correct_label"):
+            continue
+        image_paths = entry.get("image_paths") or []
+        count += len(image_paths)
+    return count
 
 
 def _user_counter_path(user_id: str) -> Path:
@@ -410,6 +425,7 @@ def _log_case_entry(
     image_ids = _collect_image_ids(updated_entries, case_id)
     if image_ids:
         entry["image_ids"] = image_ids
+        entry["image_paths"] = [f"{user_id}/{img_id}.jpg" for img_id in image_ids]
 
     updated_entries.append(entry)
     _write_metadata_entries(metadata_path, updated_entries)
@@ -685,6 +701,124 @@ async def update_case(
     return {"status": "ok", "case_id": case_id}
 
 
+
+
+@app.get("/model/retrain-status", dependencies=[Depends(require_api_key)])
+async def get_retrain_status_endpoint(user_context: Dict[str, str] = Depends(get_user_context)):
+    """
+    Get current retraining status and statistics.
+    """
+    try:
+        status = get_retrain_status()
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get retrain status: {str(e)}")
+
+
+@app.post("/model/retrain", dependencies=[Depends(require_api_key)])
+async def retrain_model_endpoint(user_context: Dict[str, str] = Depends(get_user_context)):
+    """
+    Trigger model retraining using labeled data from active learning.
+    Only admins can trigger retraining.
+    """
+    user_role = user_context.get("user_role", "").lower()
+
+    if user_role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can trigger model retraining")
+
+    try:
+        total_rejected_labeled = _count_rejected_labeled_images(_read_all_metadata_entries())
+        if total_rejected_labeled < config.RETRAIN_MIN_NEW_LABELS:
+            return {
+                "status": "skipped",
+                "reason": "insufficient_rejected_labels",
+                "required": config.RETRAIN_MIN_NEW_LABELS,
+                "current": total_rejected_labeled,
+            }
+
+        # Run retraining script asynchronously
+        script_path = Path(__file__).parent / "retrain_model.py"
+
+        # Start retraining in background
+        process = subprocess.Popen([
+            "python", str(script_path),
+            "--epochs", "5",
+            "--batch-size", "16",
+            "--learning-rate", "0.0001",
+            "--min-samples", "10"
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        # Return immediately with process info
+        return {
+            "status": "retraining_started",
+            "message": "Model retraining has been started in the background",
+            "process_id": process.pid
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start retraining: {str(e)}")
+
+@app.post("/cases/{case_id}/label", dependencies=[Depends(require_api_key)])
+async def submit_case_label(
+    case_id: str,
+    payload: LabelSubmission,
+    user_context: Dict[str, str] = Depends(get_user_context)
+):
+    """
+    Submit a label for a case in active learning.
+    """
+    # Find and update the case
+    user_id = user_context["user_id"]
+    user_role = user_context.get("user_role", "")
+
+    # Load user metadata using JSONL format
+    metadata_path = _user_metadata_path(user_id)
+    if not metadata_path.exists():
+        raise HTTPException(status_code=404, detail="User metadata not found")
+
+    # Read metadata entries using JSONL format
+    metadata = _read_metadata_entries(metadata_path)
+
+    # Find the case (prefer rejected entry, then fall back to case/uncertain)
+    case_index = None
+    fallback_index = None
+    for i in range(len(metadata) - 1, -1, -1):
+        entry = metadata[i]
+        if entry.get("case_id") != case_id:
+            continue
+        entry_type = entry.get("entry_type")
+        if entry_type == "reject":
+            case_index = i
+            break
+        if fallback_index is None and entry_type in {"case", "uncertain"}:
+            fallback_index = i
+
+    if case_index is None:
+        case_index = fallback_index
+
+    if case_index is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    # Update the case with the label
+    entry = metadata[case_index]
+    entry["correct_label"] = payload.correct_label
+    entry["labeled_by"] = user_id
+    entry["labeled_at"] = datetime.now().isoformat()
+    entry["label_notes"] = payload.notes
+    entry["updated_at"] = datetime.now().isoformat()
+    metadata[case_index] = entry
+
+    # Save updated metadata using JSONL format
+    _write_metadata_entries(metadata_path, metadata)
+
+    return {
+        "status": "ok",
+        "message": "Label submitted successfully",
+        "case_id": case_id,
+        "correct_label": payload.correct_label
+    }
+
+
 @app.post("/cases/uncertain", dependencies=[Depends(require_api_key)])
 async def log_uncertain_case(payload: CaseLog, user_context: Dict[str, str] = Depends(get_user_context)):
     entry = _log_case_entry(
@@ -713,6 +847,70 @@ async def reject_case(payload: RejectCase, user_context: Dict[str, str] = Depend
     )
     return {"status": "ok", "message": "rejected_logged"}
 
+
+
+app.mount("/images", StaticFiles(directory=config.STORAGE_ROOT), name="images")
+
+# แทนที่ฟังก์ชัน get_active_learning_candidates_endpoint ด้วย:
+@app.post("/active-learning/candidates", dependencies=[Depends(require_api_key)])
+async def get_active_learning_candidates_endpoint(payload: Dict[str, Any], user_context: Dict[str, str] = Depends(get_user_context)):
+    """
+    Get active learning candidates based on uncertainty sampling.
+    For doctors and admins, considers all cases in the system.
+    For GPs, considers only their own cases.
+    """
+    user_role = user_context.get("user_role", "").lower()
+    top_k = payload.get('top_k', 5)
+
+    # Get entries based on user role
+    if user_role in {"doctor", "admin"}:
+        # Doctors and admins can see all cases for active learning
+        all_entries = _read_all_metadata_entries()
+        entries = [entry for entry in all_entries if entry]
+    else:
+        # GPs can only see their own cases
+        entries = _read_user_metadata_entries(user_context["user_id"])
+
+    if not entries:
+        return {"candidates": [], "total_candidates": 0, "message": "No cases available"}
+
+    # Separate rejected case entries and image entries
+    rejected_entries = [
+        e for e in entries
+        if e.get('entry_type') == 'reject' and not e.get('correct_label')
+    ]
+    image_entries = {e['image_id']: e for e in entries if 'image_id' in e}
+
+    # Build rejected cases with images
+    cases = []
+    for case_entry in rejected_entries:
+        images = []
+        for image_path in case_entry.get('image_paths', []) or []:
+            image_id = Path(str(image_path)).stem if image_path else None
+            img_entry = image_entries.get(image_id) if image_id else None
+            image_payload = {
+                'path': image_path,
+                'image_id': image_id,
+            }
+            if img_entry:
+                image_payload.update({
+                    'predictions': img_entry.get('predictions', []),
+                    'blur_score': img_entry.get('blur_score'),
+                    'status': img_entry.get('status'),
+                })
+            images.append(image_payload)
+        if images:
+            case_entry['images'] = images
+        cases.append(case_entry)
+
+    if not cases:
+        return {"candidates": [], "total_candidates": 0, "message": "No cases with images available"}
+
+    result = get_active_learning_candidates(cases, top_k)
+    return result
+
+
+model_service = ModelService(conf_threshold=config.CONF_THRESHOLD)
 
 if __name__ == "__main__":
     import uvicorn

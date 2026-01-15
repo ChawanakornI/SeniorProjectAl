@@ -95,6 +95,11 @@ class RejectCase(BaseModel):
     created_at: Optional[str] = None
 
 
+class LabelSubmission(BaseModel):
+    correct_label: str
+    notes: Optional[str] = None
+
+
 # Authentication schemas
 class LoginRequest(BaseModel):
     """Request body for login endpoint."""
