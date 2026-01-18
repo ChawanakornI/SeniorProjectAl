@@ -51,6 +51,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
   String? _selectedAge;
   String? _selectedSpecificLocation;
   late final TextEditingController _hashController;
+
+  late final TextEditingController _customSymptomsController;
   String? _caseId;
   late final String _createdAt;
   String? _updatedAt;
@@ -92,6 +94,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     // Set initial text. If caseId is missing, we'll fetch it.
     _hashController = TextEditingController(text: _caseId ?? 'Loading...');
 
+    _customSymptomsController = TextEditingController();
+
     if (_caseId == null || _caseId!.isEmpty) {
       _loadCaseId();
     }
@@ -109,6 +113,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
   @override
   void dispose() {
     _hashController.dispose();
+
+    _customSymptomsController.dispose();
     super.dispose();
   }
 
@@ -155,7 +161,10 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
 
     final selectedSymptoms =
         _symptoms.entries.where((e) => e.value).map((e) => e.key).toList();
-
+    // TODO(human): Step 5 - Also add custom symptoms here (same as _handleCancel)
+    if (_customSymptomsController.text.trim().isNotEmpty) {
+      selectedSymptoms.add(_customSymptomsController.text.trim());
+    }
     setState(() {
       _isSaving = true;
     });
@@ -224,7 +233,38 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
   Future<void> _handleCancel() async {
     await _releaseCaseIdIfNeeded();
     if (!mounted) return;
-    Navigator.of(context).pop();
+
+
+    final selectedSymptoms =
+        _symptoms.entries.where((e) => e.value).map((e) => e.key).toList();
+ 
+    if (_customSymptomsController.text.trim().isNotEmpty) {
+      selectedSymptoms.add(_customSymptomsController.text.trim());
+    }
+    final imagePaths = _selectedImagePaths;
+    if(widget.isEditing){
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder:
+              (_) => CaseSummaryScreen(
+                caseId: _caseId!,
+                gender: _selectedGender,
+                age: _selectedAge,
+                location: _selectedSpecificLocation,
+                symptoms: selectedSymptoms,
+                imagePaths: imagePaths,
+                imagePath: imagePaths.isNotEmpty ? imagePaths.first : '',
+                predictions: widget.initialPredictions,
+                createdAt: _createdAt,
+                updatedAt: _updatedAt,
+                isPrePrediction: !widget.persistChanges,
+            )
+        )
+      );
+    }else {
+      Navigator.of(context).pop();
+    }
+    
   }
 
   void _handlePopInvokedWithResult(bool didPop, Object? result) {
@@ -466,15 +506,21 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
 
   Widget _buildSymptomCheckboxes(bool isDark) {
     return Column(
-      children:
-          _symptoms.keys.map((key) {
-            return customCheckboxRow(
-              label: key,
-              value: _symptoms[key]!,
-              isDark: isDark,
-              onChanged: (v) => setState(() => _symptoms[key] = v),
-            );
-          }).toList(),
+      children: [
+        ..._symptoms.keys.map((key) {
+          return customCheckboxRow(
+            label: key,
+            value: _symptoms[key]!,
+            isDark: isDark,
+            onChanged: (v) => setState(() => _symptoms[key] = v),
+          );
+        }),
+        _buildTextField(
+          label: 'Other Symptoms (optional)',
+          controller: _customSymptomsController,
+          isDark: isDark,
+        ),
+      ],
     );
   }
 
@@ -1009,7 +1055,9 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                             .where((e) => e.value)
                                             .map((e) => e.key)
                                             .toList();
-
+                                            if (_customSymptomsController.text.trim().isNotEmpty) {
+                                              selectedSymptoms.add(_customSymptomsController.text.trim());
+                                            }
                                         // Navigate to Photo Preview
                                         final bool? shouldSave = await Navigator.of(context).push<bool>(
                                             MaterialPageRoute(

@@ -9,7 +9,6 @@ import '../../app_state.dart';
 /// Service for getting ML predictions from the backend server.
 /// 
 /// This service calls the FastAPI backend's /check-image endpoint
-/// which runs the HAM10000 ResNet50 model for skin lesion classification.
 class PredictionService {
   /// Singleton instance
   static final PredictionService _instance = PredictionService._internal();
@@ -81,7 +80,6 @@ class PredictionService {
       rethrow;
     }
   }
-
   /// Legacy method for compatibility - extracts just the predictions list
   Future<List<Map<String, dynamic>>> predict(String imagePath) async {
     final result = await predictSingle(imagePath);

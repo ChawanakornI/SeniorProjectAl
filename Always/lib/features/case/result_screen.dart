@@ -898,10 +898,7 @@ class _ResultScreenState extends State<ResultScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: GestureDetector(
         onTap: () {
-          // TODO: Implement action
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('$text clicked')));
+          _handleActionLink(text);
         },
         child: Text(
           text,
@@ -912,6 +909,65 @@ class _ResultScreenState extends State<ResultScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _handleActionLink(String text) async {
+    switch (text) {
+      case 'Add to Patient Record':
+        final confidence = _topConfidenceForImage(_currentImageIndex);
+        final label = _displayLabel(
+          _topPredictionForImage(_currentImageIndex)?['label'] as String?,
+        );
+        final riskLevel = _getRiskLevel(confidence);
+        _appendNoteLine(
+          'Added to patient record: $label '
+          '(${(confidence * 100).toStringAsFixed(0)}% $riskLevel risk).',
+        );
+        _showActionSnack('Added note for patient record.');
+        return;
+      case 'Create Referral':
+        _appendNoteLine('Referral requested for case ${widget.caseId}.');
+        _showActionSnack('Referral noted.');
+        return;
+      case 'Schedule follow-up':
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: DateTime.now().add(const Duration(days: 14)),
+          firstDate: DateTime.now(),
+          lastDate: DateTime.now().add(const Duration(days: 365)),
+        );
+        if (!mounted || picked == null) return;
+        _appendNoteLine('Follow-up scheduled for ${_formatDate(picked)}.');
+        _showActionSnack('Follow-up date added.');
+        return;
+    }
+
+    _showActionSnack('$text selected.');
+  }
+
+  void _appendNoteLine(String line) {
+    final current = _noteController.text.trimRight();
+    if (current.isEmpty) {
+      _noteController.text = line;
+    } else {
+      _noteController.text = '$current\n$line';
+    }
+    _noteController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _noteController.text.length),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
+  void _showActionSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 

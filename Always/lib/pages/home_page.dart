@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../app_state.dart';
 import '../theme/glass.dart';
 import '../features/case/create_case.dart';
+import 'label.dart';
 import '../features/case/case_service.dart';
 import '../features/case/case_summary_screen.dart';
 import 'dashboard_page.dart';
@@ -490,8 +491,12 @@ class _HomePageState extends State<HomePage> {
                     buttonText: 'Start Labeling Case',
                     isDark: isDark,
                     bgAsset: 'assets/images/LabelingCard.png',
-                    onTap: () {
-                      // Handle labeling case
+                  onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const LabelPage(),
+                        ),
+                      );
                     },
                   ),
                 ),

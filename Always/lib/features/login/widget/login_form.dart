@@ -93,9 +93,17 @@ class _LoginFormState extends State<LoginForm> {
       await appState.loadUserData();
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(
-        response.user.role == 'gp' ? Routes.gpHome : Routes.home,
-      );
+      // Route based on user role
+      String routeName;
+      if (response.user.role == 'gp') {
+        routeName = Routes.gpHome;
+      } else if (response.user.role == 'admin') {
+        routeName = Routes.admin;
+      } else {
+        // Default to doctor home page
+        routeName = Routes.home;
+      }
+      Navigator.of(context).pushReplacementNamed(routeName);
     } on SocketException {
       setState(() => _errorText = 'Cannot connect to server. Please check your network.');
     } catch (e) {

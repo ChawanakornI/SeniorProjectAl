@@ -11,8 +11,8 @@ class UserRole(str, Enum):
 
 
 class User(BaseModel):
-    """User model matching mock_credentials.csv structure."""
-    user_id: str  # e.g., "user001"
+    """User model matching structure."""
+    user_id: str  # ex. "user001"
     name: str
     surname: str
     role: UserRole

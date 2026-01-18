@@ -159,7 +159,8 @@ def add_user():
     print(f"\n{Colors.CYAN}Role{Colors.RESET}")
     print(f"  {Colors.BRIGHT_GREEN}1.{Colors.RESET} GP (General Practitioner)")
     print(f"  {Colors.BRIGHT_BLUE}2.{Colors.RESET} Doctor")
-    role_choice = input(f"{Colors.DIM}Enter choice (1 or 2): {Colors.RESET}").strip()
+    print(f"  {Colors.BRIGHT_MAGENTA}3.{Colors.RESET} Admin")
+    role_choice = input(f"{Colors.DIM}Enter choice (1, 2, or 3): {Colors.RESET}").strip()
 
     if role_choice == "1":
         role = "gp"
@@ -167,6 +168,9 @@ def add_user():
     elif role_choice == "2":
         role = "doctor"
         role_display = f"{Colors.BRIGHT_BLUE}Doctor{Colors.RESET}"
+    elif role_choice == "3":
+        role = "admin"
+        role_display = f"{Colors.BRIGHT_MAGENTA}Admin{Colors.RESET}"
     else:
         print_error("Invalid role choice!")
         return
@@ -227,6 +231,8 @@ def list_users():
             role_colored = f"{Colors.BRIGHT_GREEN}GP{Colors.RESET}"
         elif role == "doctor":
             role_colored = f"{Colors.BRIGHT_BLUE}Doctor{Colors.RESET}"
+        elif role == "admin":
+            role_colored = f"{Colors.BRIGHT_MAGENTA}Admin{Colors.RESET}"
         else:
             role_colored = role
 
@@ -351,7 +357,7 @@ def main():
             change_password()
         elif choice == "5":
             print(f"\n{Colors.BRIGHT_CYAN}╔{'═' * 60}╗{Colors.RESET}")
-            print(f"{Colors.BRIGHT_CYAN}║{Colors.RESET}  {Colors.BRIGHT_WHITE}Thank you for using the User Management Tool!{Colors.RESET}      {Colors.BRIGHT_CYAN}║{Colors.RESET}")
+            print(f"{Colors.BRIGHT_CYAN}║{Colors.RESET}  {Colors.BRIGHT_WHITE}Thank you for using the User Management Tool!{Colors.RESET}  {Colors.BRIGHT_CYAN}║{Colors.RESET}")
             print(f"{Colors.BRIGHT_CYAN}╚{'═' * 60}╝{Colors.RESET}\n")
             break
         else:

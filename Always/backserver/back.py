@@ -107,33 +107,33 @@ def _ensure_user_storage(user_id: str) -> Path:
     return user_dir
 
 
-def _load_mock_user_ids() -> List[str]:
-    credentials_path = config.PROJECT_ROOT / "assets" / "mock_credentials.csv"
-    if not credentials_path.exists():
-        return []
-    user_ids: List[str] = []
-    try:
-        with open(credentials_path, "r", encoding="utf-8") as file:
-            reader = csv.reader(file)
-            for row in reader:
-                if not row:
-                    continue
-                if row[0].strip().lower() in ("username", "#username"):
-                    continue
-                user_id = _normalize_user_id(row[0])
-                if user_id:
-                    user_ids.append(user_id)
-    except OSError:
-        return []
-    return user_ids
+# def _load_mock_user_ids() -> List[str]:
+#     credentials_path = config.PROJECT_ROOT / "assets" / "mock_credentials.csv"
+#     if not credentials_path.exists():
+#         return []
+#     user_ids: List[str] = []
+#     try:
+#         with open(credentials_path, "r", encoding="utf-8") as file:
+#             reader = csv.reader(file)
+#             for row in reader:
+#                 if not row:
+#                     continue
+#                 if row[0].strip().lower() in ("username", "#username"):
+#                     continue
+#                 user_id = _normalize_user_id(row[0])
+#                 if user_id:
+#                     user_ids.append(user_id)
+#     except OSError:
+#         return []
+#     return user_ids
 
 
-def _ensure_mock_user_dirs() -> None:
-    for user_id in _load_mock_user_ids():
-        _ensure_user_storage(user_id)
+# def _ensure_mock_user_dirs() -> None:
+#     for user_id in _load_mock_user_ids():
+#         _ensure_user_storage(user_id)
 
 
-_ensure_mock_user_dirs()
+# _ensure_mock_user_dirs()
 
 
 def get_blur_score(image):

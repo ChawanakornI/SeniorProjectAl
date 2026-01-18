@@ -98,7 +98,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
 
       final variance = laplacianSumSq / count;
       // Lower variance implies blur. Threshold tuned for mobile photos.
-      return variance < 70;
+      return variance < 20;
     } catch (_) {
       return false;
     }
