@@ -1,0 +1,445 @@
+
+#Todo List
+TODO:
+Dataset:
+    - create an python script to create a new column in metadata.jsonl to store label called biclassification which classify into two class cancerous and non-cancerous
+        - cancerous only applied to BCC and Mel
+        - non-cancerous applied to all other classes
+        
+Backend
+
+Frontend: 
+
+Bugs Found: 
+  GP can label rejected cases which is not allowed;
+  in expert/doctor flow, the label page at the first when clicked to start labeling, 
+  it should show all rejected cases waiting for labeling;
+  This is from much larger problem which is storage/ DB design;
+  Right now all cases are stored in the same table but when cases status and entry_type are different
+  we can use these two fields to pull the rejected cases into the overview page right?
+  but the other question the handle method after labeled, it has to be categorized into each new classification?
+  that means when user labeled the case (some thing with paint or brush), they have to select which class after that image(s) go to dataset folder in specific class 
+  and that probably done?
+
+  the trigger level have to measure by categories ensure non bias or data imbalance 
+
+  waiting for trigger to hit and then start retraining the model 
+
+
+
+Fixed: 
+
+
+Drive error: 
+    Target: 
+    - train with pad20 dataset
+    - CLI-based interface management tool for running active learning flow (retrain model)
+    - fix result page to have warning if pressed backward button 
+    - fix the preload on the specific location and other symptom if user has previosly put text in the text field
+    
+    Fixed :
+        - add the TextField in the create case page to allow user to add other symptoms that are not in the list (done)
+        - blur score fix right now fixed but need to test again; or implement a new way to detect the blur score (semi-done)
+
+
+    Testing Plan:
+        - Test Mel, bki, NV,
+        - Test with different image but same class
+        - Testing with input in other symptom to see does it update in the metadata or not
+
+    In Pad20 : HAM10000 
+        ACK : AKIEC ; Actinic Keratoses
+        BCC : BCC
+ seborrheic keratosis SEK : BKL ; Benign Keratosis-like Lesions 
+        NEV : NV ; Melanocytic Nevi
+        
+        In pad20 doesn't have the DF (Dermatofibroma) 
+        In HAM10000, doesn't have Squamous SCC but have VASC (Vascular Lesions)
+
+
+
+TODO: 
+Admin UI: 
+
+    I want you to help me implement admin page: "admin.dart"
+    These core functionalities needed for admin page:
+    - Upload model to the server
+    - validation; validating the uploaded input
+    - format into nice and button to press running
+    Design on this page:
+        - display button when pressed it will pop to upload model in json format
+        After uploading, it will check format first then it will show details in nice format (not json) 
+        with highlight on syntax.
+    Color background of the page should cannoli cream color 11-4302 in Pantone color code
+    In dark mode, it should use the same color but with alpha 0.1.
+
+{
+    "model_version": 1,
+    "model_name": "ham10000_resnet50_tuned_best",
+    "model_type": "ResNet50",
+    "training_dataset": "HAM10000",
+    "model_file_path": "assets/models/ham10000_resnet50_tuned_best.pt",
+    "timestamp": "2025-01-15T10:30:00Z",
+    "performance_metrics": {
+      "accuracy": 0.92,
+      "auc": 0.94,
+      "f1_score": 0.91,
+      "precision": 0.93,
+      "recall": 0.89
+    },
+    "class_mappings": {
+      "0": "AKEIC",
+      "1": "BCC",
+      "2": "BKL",
+      "3": "DK",
+      "4": "MEL",
+      "5": NV",
+      "6": "VASC"
+    },
+    "training_details": {
+      "epochs": 50,
+      "batch_size": 32,
+      "learning_rate": 0.001,
+      "optimizer": "Adam",
+      "augmentation_applied": true
+    },
+    "active_learning_metadata": {
+      "is_al_model": false,
+      "parent_model_version": null,
+      "num_al_samples_added": 0
+    },
+    "status": "production"
+  }
+
+
+
+
+AL: 
+    - transfer learning on weights on training new model after AL
+    - Database for AL
+        Labeled cases based 
+        model version based from various score and metrics; accuracy and AUC
+    - Implement Augmentation for AL which is different from normal training
+            Augmentation on only new images that are being sent to AL
+    To Try: augmentation on specific class that is being sent to AL
+
+Label page:
+    It might be like an mini app 
+    because there might have to be multiple usage
+
+    I want you to help me implement this into AL.py
+    It's one of many pages in AL flow.
+    Overall Page: to view the overall rejected cases waiting for labeling
+        • display all the rejected cases waiting for labeling
+        Each case should have the following format:
+            - show image(s); It may be more than one image per case
+            - first prediction from normal model in the bottom of the image and bottom of box
+            - case id on the top left corner
+            - margin score on the top right corner
+    It should use the box as a container to show the case
+    Color background of the box should be cannoli cream color 11-4302 in Pantone color code
+    In dark mode, it should use the same color but with alpha 0.1.
+
+DB for AL:
+There has to be at least two tables for AL:
+one for images and one for model
+table design for images that are being sent to AL
+     - case id
+     - image id 
+     - original prediction class (predicted by the model before AL) in diseases
+     - new prediction class (predicted by the model after AL) in diseases
+        - add 
+     - accuracy score (accuracy score of the model after AL)
+     - AUC score (AUC score of the model after AL)
+     - F1 score (F1 score of the model after AL)
+     - precision score (precision score of the model after AL)
+     - recall score (recall score of the model after AL)
+
+
+table design for model:
+    - model version (running number)
+    - model name (name of the model)
+    - model details [Still not think this through yet]
+    - timestamp
+
+
+
+
+
+===================================================
+===================================================
+===================================================
+
+Clarification Questions                                                                                         
+                                                                                                                  
+  1. Relationship to Existing label.dart:                                                                         
+  Your current label.dart already shows uncertain cases and allows labeling. How does your new "overview page"    
+  relate to this existing page? Should it:                                                                        
+  - Replace the existing label.dart entirely?                                                                     
+  - Be a wrapper/navigation hub that leads to label.dart?                                                         
+  - Be a separate workflow for a different type of labeling (e.g., reviewing all labeled cases vs. active learning
+   uncertain cases)?                   
+                                                                         
+                                                                                                                  
+  2. "To Be Labeled" Cases - Data Source:                                                                         
+  For stage 1 showing "all to be labeled cases", what defines a case as "to be labeled"? Should it show:          
+  - Cases from /active-learning/candidates (most uncertain cases)?                                                
+  - Cases with status: "pending" or status: "Uncertain"?                                                          
+  - Cases that don't have a correct_label field yet?                                                              
+  - All cases regardless of status?                                                                               
+  - Something else?                                                                                               
+
+
+
+
+  3. Display Format for "To Be Labeled" Cases:                                                                    
+  What information should be displayed for each case in the overview list? Should it show:                        
+  - Just a count/summary card?                                                                                    
+  - A list/grid of case cards with thumbnail images?                                                              
+  - Patient metadata (age, gender, location, symptoms)?                                                           
+  - AI predictions and confidence scores?                                                                         
+  - Uncertainty metrics (margin scores)?                                                                          
+  - Case ID, creation date, and status?                                                                           
+                                                                                                                  
+  4. "After Labeling" Page - Purpose and Content:                                                                 
+  For stage 2 (the page shown after user has labeled images), what should this page display? Is it:               
+  - A success confirmation with statistics (e.g., "You've labeled 5 cases today")?                                
+  - A review page showing all cases the user has labeled (with their labels)?                                     
+  - A progress dashboard showing labeled vs. unlabeled counts?                                                    
+  - Simply a message with a "Back to To Be Labeled" button?                                                       
+  - Something else entirely?                                                                                      
+
+1. In my mind is to replace the existing label.dart entirely   
+2. cases that are rejected by user 
+3. A container box that shows 
+    - image(s)
+    - first prediction from normal model
+    - margin score on the top right corner
+    - case id on the top left corner
+4. A review page showing all cases the user has labeled (with their labels)  
+5.   
+Normal flow is like: 
+    User come in and see list of cases that are rejected by user [ to be labeled ]                                  
+    User click on a case and then start labeling [ can be both or either way of 1. just paint on image and then change prediction classification or just change the classification only ]
+    User click on the submit button to submit the labeling
+    After that, it go to the review page to see all cases that the user has labeled
+    and then there is a button to go back to the to be labeled page
+    
+After labeled page [ result page] is a distinct page from the to be labeled page [ overview page]; this deleting the need to implement filtering 
+but sorting is still needed to sort by case id
+Doctor is the only user who can do labeling and be able to see the result page
+
+  5. Navigation Flow:                                                                                             
+  Can you clarify the complete user journey? For example:                                                         
+  - User lands on Overview Page → sees "to be labeled" list → clicks a case → goes where?                         
+  - Does clicking a case take them to the labeling tool (being developed by your team)?                           
+  - After labeling in that tool, does the user return to the Overview Page or to the "After Labeling" page?       
+  - Is the "After Labeling" page a separate route, or just a different state of the Overview Page?                
+                                                                                                                  
+  6. Filtering and Sorting:                                                                                       
+  Should the overview page support:                                                                               
+  - Filtering by case status, date, or patient metadata?                                                          
+  - Sorting by uncertainty score, creation date, or case ID?                                                      
+  - Search functionality by case ID or diagnosis?                                                                 
+  - Pagination for large numbers of cases?                                                                        
+                                                                                                                  
+  7. Role-Based Differences:                                                                                      
+  Should the overview page behave differently for different user roles?                                           
+  - GPs see only their own cases to label?                                                                        
+  - Doctors/Admins see all cases across the system?                                                               
+  - Any restrictions on who can label what?                                                                       
+                                                                                                                  
+  Please answer these questions so I can create a detailed implementation plan tailored to your exact needs! 
+
+
+
+
+
+
+
+
+1. "Rejected Cases" Definition:                                                                                 
+  When you say "cases that are rejected by user," do you mean:                                                    
+  - Cases with status: "Rejected" in the backend?                                                                 
+  - Cases with entry_type: "reject"?                                                                              
+  - Cases where user explicitly rejected the AI prediction and needs to provide correct label?                    
+  - Both rejected AND uncertain cases that need labeling?                                                         
+
+1. both rejected
+2. A container box that shows 
+    - image(s)
+    - first prediction from normal model and the user's labeled classification
+    - margin score on the top right corner
+    - case id on the top left corner
+    - timestamp of the labeling
+    User should be able to edit the labeling and submit again if they want to [Cancel and Save button]
+3. dont change the existing flow of the app; user press the start labeling button to go to the overview page
+4. the original prediction that was/were rejected by Doctor [User(s)]  
+5. after labeling page, yes it should save the labeling and go to the review page
+When there are no rejected or labeled cases yet, it should show message "No cases to be label yet" or "No cases labeled yet"                                                
+7. sorting by newest first
+8. Yes, page should show error message if the API call fails and retry button to retry the API call.
+
+  2. Review Page Display:                                                                                         
+  On the review page showing "all cases the user has labeled," what information should each labeled case show?    
+  - The image(s)?                                                                                                 
+  - The original AI prediction vs. the user's labeled classification?                                             
+  - The case ID?                                                                                                  
+  - When it was labeled?                                                                                          
+  - The margin score?                                                                                             
+  - Should users be able to re-edit labels from the review page, or is it read-only?                              
+                                                                                                                  
+  3. Navigation Entry Point:                                                                                      
+  How should users access this new label overview page?                                                           
+  - Replace the existing "Start Labeling Case" button on home_page.dart?                                          
+  - Add a new navigation item in the bottom navigation bar?                                                       
+  - A specific route path (e.g., /label-overview)?                                                                
+                                                                                                                  
+  4. "First Prediction from Normal Model":                                                                        
+  Should this be:                                                                                                 
+  - The prediction with the highest confidence score (top-1)?                                                     
+  - Or literally the first item in the predictions array as returned by backend?                                  
+                                                                                                                  
+  5. After Submission Behavior:                                                                                   
+  When user submits a label from the labeling tool (developed by your team), how does navigation happen?          
+  - Does the labeling tool call an API to save the label, then navigate to the review page?                       
+  - Should your overview page listen for updates or refresh data when returning?                                  
+  - Will the labeling tool be a separate page that you navigate to with Navigator.push()?                         
+                                                                                                                  
+  6. Empty States:                                                                                                
+  What should be displayed when:                                                                                  
+  - There are no rejected cases to label (overview page empty)?                                                   
+  - There are no labeled cases yet (review page empty)?                                                           
+
+
+  7. Sorting:                                                                                                     
+  You mentioned sorting by case ID. Should it be:                                                                 
+  - Ascending (oldest first) or descending (newest first)?                                                        
+  - Should users be able to toggle the sort direction?                                                            
+  - Any other sorting options needed (by date, by margin score)?                                                  
+                                                                                                                  
+  8. Loading & Error States:                                                                                      
+  Should the pages show:                                                                                          
+  - Loading spinners while fetching data?                                                                         
+  - Error messages if API calls fail?                                                                             
+  - Retry buttons? 
+
+
+
+
+1. A. admin user upload only JSON metadata to the backend
+2. This part still thinking, but ideally yeah want a table for model metadata keep the similar structure as existed in the uploaded json, with history as well.
+3. No, model has to be distinct from the existing model. No, it should not automatically replace the current one.
+the ability to rollback as well.
+
+  POST   /api/admin/models/upload          - Upload model metadata + file
+  GET    /api/admin/models                 - List all models
+  GET    /api/admin/models/{id}            - Get specific model details
+  POST   /api/admin/models/{id}/activate   - Set model as active
+  DELETE /api/admin/models/{id}            - Delete a model
+  GET    /api/admin/models/active          - Get currently active model
+  This structure is good now!
+
+5. after validating json by frontend, no we don't need to re-validate the JSON format by backend.
+No validation in backend for now 
+
+6. separate endpoints for now 
+
+7. JWT at the login page would be enough 
+Yes, logs is needed but it will going to correlate with the model version in database.
+No, approval required for admin.
+
+8. no, it not needed; admin only upload json model file. 
+so backend need to have ability to hit run from that file.
+
+9. Yes, ideally it should detect whether the model is trained with AL data or not.
+but it not flag in the backend yet, i mean it doesn't get used further.
+
+10. Current Backend is FastAPI. Yes in the backserver directory.
+
+
+
+
+Here’s my take, in plain terms.
+
+  Yes — if all cases live in one table, status + entry_type is enough to filter rejected cases for an overview
+  page, as long as those fields are consistent and indexed. The bigger question is whether you’ll ever need
+  radically different schemas per case type; if not, a single table with type/status is fine.
+
+  On labeling: after a user labels an image, you do want a “class” associated with each image so it lands in the
+  right dataset bucket. That can be handled two ways:
+
+  - Keep it in DB only: store image_id, class_id, labeler_id, labeled_at, and generate dataset folders on export.
+  - Write to dataset folder immediately: on label submit, move/copy into dataset/<class_name>/... and log that
+    mapping in DB. This is simpler for training pipelines but adds file ops at label time.
+
+  On pool sizes (unlabeled vs labeled vs rejected):
+
+  - Treat unlabeled as raw input images (user submissions).
+  - Labeled is a subset with confirmed class labels.
+  - Rejected is either a status on the case or a separate label type (e.g., label = rejected).
+  - Don’t delete; use status transitions. That lets you track movement between pools without data loss.
+
+  A minimal schema pattern that works well:
+
+  - cases (case metadata: id, status, entry_type, created_at, user_id…)
+  - case_images (image metadata, case_id, path, created_at…)
+  - labels (case_image_id, class_id, labeler_id, label_type = accepted/rejected, labeled_at)
+  - classes (id, name, active)
+    This lets you:
+  - query rejected cases by labels.label_type = rejected or cases.status = rejected
+  - query labeled dataset by labels.label_type = accepted
+  - keep unlabeled images as those with no labels yet
+
+  Questions to confirm so I don’t steer you wrong:
+
+  1. Do you need multiple labels per image (e.g., relabeling or QC)?
+  2. Is “rejected” a label decision or a case status?
+  3. Do you want dataset folders updated in real time, or only at training/export time?
+
+  Recommended flow (single label per image):
+
+  - Status progression: new → needs_label (or your existing rejected) → labeled → trained (optional).
+  - Labeling: user paints/brushes, must pick a class; on submit, write class_id once (unique per image) and flip
+    status to labeled.
+  - Real‑time dataset: after label save, move/copy into dataset/<class_name>/... and store dataset_path so
+    retraining jobs don’t have to re-scan raw inputs.
+
+  Minimal schema shape:
+
+  - cases: id, status, entry_type, created_at, updated_at, user_id…
+  - case_images: id, case_id, path_raw, created_at…
+  - labels: image_id (unique), class_id, labeled_at, labeled_by, dataset_path
+
+  Pool sizes should be derived, not stored:
+
+  - Unlabeled = images with no labels row and cases.status in labelable states
+  - Labeled = images with a labels row
+  - Rejected = cases.status='rejected' (still labelable)
+
+  AL trigger by size:
+
+  - Keep a training_runs table (or metadata) with last_trained_at.
+  - Trigger when COUNT(labels WHERE labeled_at > last_trained_at) reaches your threshold.
+
+  Open question before I draft exact SQL/queries: do cases contain multiple images or exactly one image per case?
+
+So right now the DB structure is like this:
+Each case tied to specific user [User can be GP or Doctor]
+there fore, in storage folder we have folder of each user in userid style naming 
+Each case can up to 8 images
+Each case will have the case_status and entry_type field that differentiate and classify as the "rejected"
+
+This is one example row of the metadata.jsonl file:
+{"case_id": "10009", "image_id": "7e45b0c8-7660-48fa-80fb-3447bd5aa072", "blur_score": 86.52354966395619, "predictions": [{"label": "nv", "confidence": 0.4068748652935028}, {"label": "vasc", "confidence": 0.2983933091163635}, {"label": "df", "confidence": 0.19614459574222565}, {"label": "akiec", "confidence": 0.045788947492837906}, {"label": "bcc", "confidence": 0.030760183930397034}, {"label": "mel", "confidence": 0.018325699493288994}, {"label": "bkl", "confidence": 0.0037124038208276033}], "status": "success", "created_at": "2026-01-19T17:53:51.974849", "user_id": "user001", "user_role": "gp", "case_status": "rejected", "case_entry_type": "reject", "case_updated_at": "2026-01-19T17:54:01.617936", "gender": "M", "age": "7", "location": "Face", "symptoms": ["raised scar"], "notes": "Decisions: image_1: Confirm, image_2: Reject"}
+
+My questions are 
+
+Rejected cases and individual images
+
+
+create a plan to create a page for review all labeled cases after user have done with labeling [ click save on lib/features/case/the annotate_screen.dart]
+This review page should show all the labeled cases and the images in each case
+along with the user's labeled classification and timestamp of labeling 
+The option to edit the labeling and submit again if they want to
+

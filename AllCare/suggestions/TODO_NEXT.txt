@@ -1,0 +1,16 @@
+
+FEATURES & FLOWS
+- Build the labeling page and route it from Notifications and Home case records; align with GP vs Doctor flows.
+- Split Result experience: GP can only decide per image and auto-confirm when all images are decided; Doctor keeps full controls and backend logging.
+- Dashboard trend graph: respect selected period (today/week/month/all time) and allow filtering by accept/uncertain/reject.
+- Result actions: implement the “Recommended” links (Add to Patient Record, Create Referral, Schedule follow-up) or remove placeholders.
+
+BACKEND & DATA
+- Support encrypted/pseudonymized storage for case metadata and images; clarify where keys live.
+- Fix case numbering: generate running numbers on the server (or shared store) instead of the hardcoded “01” suffix in `create_case.dart`.
+- Persist per-image decisions/notes in `CaseService` payloads and FastAPI handlers so case records reflect image-level choices.
+- Add API key validation coverage and document required env vars (`API_KEY`, `ALLOWED_ORIGINS`, model/device toggles).
+
+TESTING & QUALITY
+- Add widget tests for login, create-case (add/delete images), case summary counts, and result decision flows (GP vs Doctor).
+- Add integration smoke: `PredictionService.predictMultiple` happy-path mock, and backend health/prediction endpoints using a lightweight fixture image.

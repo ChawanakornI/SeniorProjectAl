@@ -1,0 +1,38 @@
+{
+  "user001": {
+    "password_hash": "$2b$12$VAHr2D5wydGsXKfU.YxIwuwypTgg3XtD/.MeTcVnYmGzCSbi31KEC",
+    "first_name": "Alex",
+    "last_name": "Chen",
+    "role": "gp"
+  },
+  "user002": {
+    "password_hash": "$2b$12$tC0Lyi80COOdafUuSmZI2OXgL8AZmS1.kgALhf/zsRBJsGYJKZ/Xe",
+    "first_name": "Maya",
+    "last_name": "Patel",
+    "role": "doctor"
+  },
+  "user003": {
+    "password_hash": "$2b$12$Af1UHLqVNFRsinZkW/K/OuIUIBKrIA6mqjBf/54FZkxtXEsVDbqBC",
+    "first_name": "Niran",
+    "last_name": "Somchai",
+    "role": "gp"
+  },
+  "user004": {
+    "password_hash": "$2b$12$oJzsCliHyr/Ul09WIVc4jughLqusgJciADB5IUJ1QFpQxHhnA13xi",
+    "first_name": "Sofia",
+    "last_name": "Garcia",
+    "role": "doctor"
+  },
+  "user005": {
+    "password_hash": "$2b$12$9Ivi5FQKAgo3FRPZve4ORejDdAcURj3ztzwtj0oB3HPJVb1Omo04G",
+    "first_name": "Omar",
+    "last_name": "Hassan",
+    "role": "gp"
+  },
+  "user006": {
+    "password_hash": "$2b$12$YmN2oaQh4QZZIgrBpU4Yfu/6XW1/WBDgWTnQqDhn8gYXFLg37GaV.",
+    "first_name": "Jake",
+    "last_name": "Peralta",
+    "role": "admin"
+  }
+}
