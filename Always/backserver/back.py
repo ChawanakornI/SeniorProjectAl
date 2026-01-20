@@ -1,4 +1,3 @@
-import csv
 import json
 import threading
 import uuid
@@ -31,8 +30,8 @@ from .schemas import (
     LoginRequest,
     TokenResponse,
     UserInfo,
+    AnnotationSubmission,
 )
-
 app = FastAPI()
 
 # Case ID sequencing
@@ -105,35 +104,6 @@ def _ensure_user_storage(user_id: str) -> Path:
     user_dir = _user_storage_dir(user_id)
     user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir
-
-
-# def _load_mock_user_ids() -> List[str]:
-#     credentials_path = config.PROJECT_ROOT / "assets" / "mock_credentials.csv"
-#     if not credentials_path.exists():
-#         return []
-#     user_ids: List[str] = []
-#     try:
-#         with open(credentials_path, "r", encoding="utf-8") as file:
-#             reader = csv.reader(file)
-#             for row in reader:
-#                 if not row:
-#                     continue
-#                 if row[0].strip().lower() in ("username", "#username"):
-#                     continue
-#                 user_id = _normalize_user_id(row[0])
-#                 if user_id:
-#                     user_ids.append(user_id)
-#     except OSError:
-#         return []
-#     return user_ids
-
-
-# def _ensure_mock_user_dirs() -> None:
-#     for user_id in _load_mock_user_ids():
-#         _ensure_user_storage(user_id)
-
-
-# _ensure_mock_user_dirs()
 
 
 def get_blur_score(image):
@@ -767,9 +737,12 @@ async def submit_case_label(
     """
     Submit a label for a case in active learning.
     """
+    
     # Find and update the case
     user_id = user_context["user_id"]
     user_role = user_context.get("user_role", "")
+    if user_role == "gp":
+        raise HTTPException(status_code=403, detail="GP role is not allowed to label rejected cases")
 
     # Load user metadata using JSONL format
     metadata_path = _user_metadata_path(user_id)
@@ -847,6 +820,85 @@ async def reject_case(payload: RejectCase, user_context: Dict[str, str] = Depend
     )
     return {"status": "ok", "message": "rejected_logged"}
 
+
+#(bridge-frontend-backend): Add annotations endpoint
+# This endpoint receives annotation data from the AnnotateScreen (strokes, boxes, correct label)
+# and updates the rejected case entry for active learning model retraining.
+
+@app.post("/cases/{case_id}/annotations", dependencies=[Depends(require_api_key)])
+async def save_annotations(
+    case_id: str,
+    payload: AnnotationSubmission,
+    user_context: Dict[str, str] = Depends(get_user_context),
+):
+    """
+    Save manual annotations (strokes, boxes, correct_label) for a case.
+    Updates the case's correct_label for active learning retraining.
+    """
+    user_id = user_context["user_id"]
+    user_role = user_context.get("user_role", "")
+    case_user_id = (payload.case_user_id or "").strip()
+    target_user_id = case_user_id or user_id
+
+    def _find_rejected_case_index(case_entries: List[Dict[str, Any]]) -> Optional[int]:
+        for i in range(len(case_entries) - 1, -1, -1):
+            entry = case_entries[i]
+            if entry.get("case_id") == case_id and entry.get("entry_type") == "reject":
+                return i
+        return None
+
+    metadata_path = _user_metadata_path(target_user_id)
+    entries = _read_metadata_entries(metadata_path)
+
+    # Find the rejected case entry for the target user
+    case_index = _find_rejected_case_index(entries)
+
+    # Allow doctors/admins to annotate rejected cases across users when needed
+    if case_index is None and not case_user_id and user_role.lower() in {"doctor", "admin"}:
+        matched = None
+        for _, candidate_path in _iter_user_metadata_paths():
+            candidate_entries = _read_metadata_entries(candidate_path)
+            candidate_index = _find_rejected_case_index(candidate_entries)
+            if candidate_index is None:
+                continue
+            if matched is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Multiple rejected cases found for case_id; provide case_user_id",
+                )
+            matched = (candidate_path, candidate_entries, candidate_index)
+        if matched is not None:
+            metadata_path, entries, case_index = matched
+
+    if case_index is None:
+        if case_user_id and not metadata_path.exists():
+            raise HTTPException(status_code=404, detail="User metadata not found")
+        raise HTTPException(status_code=404, detail="Rejected case not found")
+    
+    # Block GP role from annotating rejected cases
+    if user_role.lower() == "gp":
+        raise HTTPException(status_code=403, detail="GP role is not allowed to annotate rejected cases")
+
+    # Update with annotation data
+    entry = entries[case_index]
+    entry["correct_label"] = payload.correct_label
+    entry["annotations"] = payload.annotations
+    entry["annotated_by"] = user_id
+    entry["annotated_at"] = payload.annotated_at or datetime.now().isoformat()
+    entry["annotation_image_index"] = payload.image_index
+    if payload.notes:
+        entry["annotation_notes"] = payload.notes
+    entry["updated_at"] = datetime.now().isoformat()
+
+    entries[case_index] = entry
+    _write_metadata_entries(metadata_path, entries)
+
+    return {
+        "status": "ok",
+        "message": "Annotations saved successfully",
+        "case_id": case_id,
+        "correct_label": payload.correct_label,
+    }
 
 
 app.mount("/images", StaticFiles(directory=config.STORAGE_ROOT), name="images")

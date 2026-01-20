@@ -100,6 +100,20 @@ class LabelSubmission(BaseModel):
     notes: Optional[str] = None
 
 
+# (bridge-frontend-backend): Add AnnotationSubmission schema
+# This schema validates annotation data from the Flutter AnnotateScreen.
+# It includes the corrected label, stroke/box coordinates, and metadata.
+#
+class AnnotationSubmission(BaseModel):
+    """Submission of manual annotations from the AnnotateScreen."""
+    image_index: int
+    correct_label: str
+    annotations: Optional[dict] = None  # Contains 'strokes' and 'boxes'
+    case_user_id: Optional[str] = None
+    notes: Optional[str] = None
+    annotated_at: Optional[str] = None
+
+
 # Authentication schemas
 class LoginRequest(BaseModel):
     """Request body for login endpoint."""

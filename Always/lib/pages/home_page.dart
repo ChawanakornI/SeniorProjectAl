@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import '../app_state.dart';
 import '../theme/glass.dart';
 import '../features/case/create_case.dart';
-import 'label.dart';
+import 'overviewlabel.dart';
 import '../features/case/case_service.dart';
 import '../features/case/case_summary_screen.dart';
 import 'dashboard_page.dart';
@@ -127,6 +127,9 @@ class _HomePageState extends State<HomePage> {
 
   void _onAppStateChanged() {
     if (mounted) {
+      if (widget.showLabeling == null) {
+        _shouldShowLabeling = appState.userRole != 'gp';
+      }
       setState(() {});
     }
   }

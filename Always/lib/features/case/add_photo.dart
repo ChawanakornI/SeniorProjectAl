@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
+import 'api_config.dart';
 import 'camera_screen.dart'; // ตรวจสอบว่า import ไฟล์นี้ถูกต้องตามโปรเจกต์คุณ
 
 class AddPhotoDialog extends StatefulWidget {
@@ -131,6 +132,20 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
     return lower.startsWith('http://') || lower.startsWith('https://');
   }
 
+  bool _isBackendRelativePath(String path) {
+    if (path.isEmpty) return false;
+    if (_isNetworkPath(path)) return false;
+    if (path.startsWith('/')) return false;
+    return path.contains('/') && !path.contains('\\');
+  }
+
+  String _resolveImagePath(String path) {
+    if (_isBackendRelativePath(path)) {
+      return '${ApiConfig.baseUrl}/images/$path';
+    }
+    return path;
+  }
+
   Widget _buildThumbnailPlaceholder(bool isDark) {
     return Container(
       color: isDark ? const Color(0xFF2C2C2E) : Colors.grey.shade200,
@@ -144,14 +159,18 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
 
   Widget _buildThumbnail(String path, bool isDark) {
     final placeholder = _buildThumbnailPlaceholder(isDark);
-    if (_isNetworkPath(path)) {
+    final resolvedPath = _resolveImagePath(path);
+
+    if (resolvedPath.isEmpty) return placeholder;
+
+    if (_isNetworkPath(resolvedPath)) {
       return Image.network(
-        path,
+        resolvedPath,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => placeholder,
       );
     }
-    final file = File(path);
+    final file = File(resolvedPath);
     if (!file.existsSync()) return placeholder;
     return Image.file(
       file,

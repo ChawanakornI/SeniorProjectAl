@@ -397,4 +397,65 @@ class CaseService {
       rethrow;
     }
   }
+
+  // (bridge-frontend-backend): Add saveAnnotations() method
+  // This method bridges AnnotateScreen output to the backend.
+  // It sends the annotation data (strokes, boxes, correct label) to the server
+  // for storage and future active learning model retraining.
+  //
+  Future<void> saveAnnotations({
+    required String caseId,
+    required int imageIndex,
+    required String correctLabel,
+    List<Map<String, dynamic>> strokes = const [],
+    List<Map<String, dynamic>> boxes = const [],
+    String? caseUserId,
+    String? notes,
+  }) async {
+    final role = appState.userRole.trim().toLowerCase();
+    if (role == 'gp') {
+      log('Blocked GP annotation attempt for case $caseId', name: 'CaseService');
+      throw Exception('GP role is not allowed to annotate rejected cases');
+    }
+
+    log('Saving annotations for case $caseId, image $imageIndex', name: 'CaseService');
+  
+    try {
+      final headers = ApiConfig.buildHeaders(
+        json: true,
+        token: appState.accessToken,
+        userId: appState.userId,
+        userRole: appState.userRole,
+      );
+      final body = jsonEncode({
+        'image_index': imageIndex,
+        'correct_label': correctLabel,
+        'annotations': {
+          'strokes': strokes,
+          'boxes': boxes,
+        },
+        if (caseUserId != null && caseUserId.trim().isNotEmpty)
+          'case_user_id': caseUserId.trim(),
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+        'annotated_at': DateTime.now().toIso8601String(),
+      });
+  
+      final response = await http
+          .post(ApiConfig.annotationsUri(caseId), headers: headers, body: body)
+          .timeout(const Duration(seconds: 10));
+  
+      if (response.statusCode == 200) {
+        log('Annotations saved successfully', name: 'CaseService');
+      } else {
+        log('Failed to save annotations: ${response.statusCode}', name: 'CaseService');
+        throw Exception('Failed to save annotations: ${response.statusCode}');
+      }
+    } on SocketException catch (e) {
+      log('Network error: $e', name: 'CaseService');
+      throw Exception('Cannot connect to server.');
+    } catch (e) {
+      log('Error saving annotations: $e', name: 'CaseService');
+      rethrow;
+    }
+  }
 }

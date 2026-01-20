@@ -12,6 +12,7 @@ import 'add_photo.dart';
 import 'case_service.dart';
 import 'photo_preview_screen.dart';
 import 'case_summary_screen.dart';
+import 'api_config.dart';
 
 class NewCaseScreen extends StatefulWidget {
   const NewCaseScreen({
@@ -557,6 +558,20 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     return lower.startsWith('http://') || lower.startsWith('https://');
   }
 
+  bool _isBackendRelativePath(String path) {
+    if (path.isEmpty) return false;
+    if (_isNetworkPath(path)) return false;
+    if (path.startsWith('/')) return false;
+    return path.contains('/') && !path.contains('\\');
+  }
+
+  String _resolveImagePath(String path) {
+    if (_isBackendRelativePath(path)) {
+      return '${ApiConfig.baseUrl}/images/$path';
+    }
+    return path;
+  }
+
   Widget _buildImagePlaceholder(bool isDark) {
     return Container(
       color: isDark ? const Color(0xFF2C2C2E) : Colors.grey.shade200,
@@ -570,14 +585,18 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
 
   Widget _buildImageThumbnail(String path, bool isDark) {
     final placeholder = _buildImagePlaceholder(isDark);
-    if (_isNetworkPath(path)) {
+    final resolvedPath = _resolveImagePath(path);
+
+    if (resolvedPath.isEmpty) return placeholder;
+
+    if (_isNetworkPath(resolvedPath)) {
       return Image.network(
-        path,
+        resolvedPath,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => placeholder,
       );
     }
-    final file = File(path);
+    final file = File(resolvedPath);
     if (!file.existsSync()) return placeholder;
     return Image.file(
       file,

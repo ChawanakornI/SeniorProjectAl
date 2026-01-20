@@ -1,5 +1,3 @@
-/// Shared API configuration for the backend server.
-/// 
 /// Usage:
 ///   flutter run --dart-define=BACKSERVER_BASE=http://your ip addr:8000
 /// 
@@ -56,6 +54,12 @@ class ApiConfig {
 
   /// Reject case endpoint
   static Uri get rejectCaseUri => Uri.parse('$baseUrl/cases/reject');
+
+  // (bridge-frontend-backend): Add annotations endpoint
+  // This endpoint saves manual annotations (strokes, boxes, correct class)
+  // from the AnnotateScreen to the backend for active learning.
+  static Uri annotationsUri(String caseId) =>
+      Uri.parse('$baseUrl/cases/$caseId/annotations');
 
   /// Authentication login endpoint
   static Uri get authLoginUri => Uri.parse('$baseUrl/auth/login');

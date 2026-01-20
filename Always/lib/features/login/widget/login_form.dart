@@ -82,11 +82,13 @@ class _LoginFormState extends State<LoginForm> {
       // Clear previous user session before loading new user
       appState.clearUserSession();
 
+      final normalizedRole = response.user.role.trim().toLowerCase();
+
       // Set user data from login response
       appState.setUserId(response.user.userId);
       appState.setFirstName(response.user.firstName);
       appState.setLastName(response.user.lastName);
-      appState.setUserRole(response.user.role);
+      appState.setUserRole(normalizedRole);
       appState.setAccessToken(response.accessToken);
 
       // Load user-specific persisted data (profile image, custom names)
@@ -95,9 +97,9 @@ class _LoginFormState extends State<LoginForm> {
       if (!mounted) return;
       // Route based on user role
       String routeName;
-      if (response.user.role == 'gp') {
+      if (normalizedRole == 'gp') {
         routeName = Routes.gpHome;
-      } else if (response.user.role == 'admin') {
+      } else if (normalizedRole == 'admin') {
         routeName = Routes.admin;
       } else {
         // Default to doctor home page

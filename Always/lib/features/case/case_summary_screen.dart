@@ -2,8 +2,9 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../theme/glass.dart';
+import 'api_config.dart';
 import 'prediction_service.dart';
-import 'result_screen.dart';
+import '../../pages/result_screen.dart';
 import 'create_case.dart';
 
 /// Case Summary screen - shows case details after images are saved.
@@ -85,6 +86,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
 
     return uniquePaths.where((path) {
       if (_isNetworkPath(path)) return true;
+      if (_isBackendRelativePath(path)) return true; // Backend paths are valid
       return File(path).existsSync();
     }).toList();
   }
@@ -92,6 +94,29 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
   bool _isNetworkPath(String path) {
     final lower = path.toLowerCase();
     return lower.startsWith('http://') || lower.startsWith('https://');
+  }
+
+  /// Check if path is a backend-relative path (e.g., 'user001/uuid.jpg')
+  /// These need to be converted to full URLs for network access
+  bool _isBackendRelativePath(String path) {
+    // Backend paths look like 'user001/uuid.jpg' or 'userXXX/something.jpg'
+    // They don't start with '/' (not absolute) and aren't URLs
+    if (path.isEmpty) return false;
+    if (_isNetworkPath(path)) return false;
+    if (path.startsWith('/')) return false; // Absolute local path
+    // Check if it matches pattern: userXXX/filename.ext
+    return path.contains('/') && !path.contains('\\');
+  }
+
+  /// Convert a path to the appropriate format for display
+  /// - Backend relative paths → full network URLs
+  /// - Already full URLs → unchanged
+  /// - Local paths → unchanged
+  String _resolveImagePath(String path) {
+    if (_isBackendRelativePath(path)) {
+      return '${ApiConfig.baseUrl}/images/$path';
+    }
+    return path;
   }
 
   @override
@@ -951,19 +976,21 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
   }
 
   Widget _buildDiagnosticImage(String path, bool isDark) {
-    final isNetworkImage = _isNetworkPath(path);
+    // Resolve backend-relative paths to full URLs
+    final resolvedPath = _resolveImagePath(path);
+    final isNetworkImage = _isNetworkPath(resolvedPath);
     final placeholder = _buildMissingImagePlaceholder(isDark);
 
     return isNetworkImage
         ? Image.network(
-          path,
+          resolvedPath,
           width: double.infinity,
           height: 220,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => placeholder,
         )
         : Image.file(
-          File(path),
+          File(resolvedPath),
           width: double.infinity,
           height: 220,
           fit: BoxFit.cover,

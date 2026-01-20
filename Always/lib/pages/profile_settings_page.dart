@@ -600,10 +600,11 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                                 appState.setFirstName(_firstNameController.text);
                                 appState.setLastName(_lastNameController.text);
 
+
                                 // Persist names to SharedPreferences
                                 await appState.persistNames();
 
-                                if (!mounted) return;
+                                if (!context.mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
