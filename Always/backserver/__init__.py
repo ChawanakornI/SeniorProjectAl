@@ -1,4 +1,0 @@
-"""
-Backend package initializer.
-"""
-
