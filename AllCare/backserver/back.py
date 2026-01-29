@@ -1,3 +1,4 @@
+
 import json
 import threading
 import uuid
@@ -926,16 +927,16 @@ async def get_active_learning_candidates_endpoint(payload: Dict[str, Any], user_
     if not entries:
         return {"candidates": [], "total_candidates": 0, "message": "No cases available"}
 
-    # Separate rejected case entries and image entries
-    rejected_entries = [
+    # Compute margin for all cases
+    candidates_entries = [
         e for e in entries
-        if e.get('entry_type') == 'reject' and not e.get('correct_label')
+        if not e.get('correct_label')
     ]
     image_entries = {e['image_id']: e for e in entries if 'image_id' in e}
 
-    # Build rejected cases with images
+    # Build cases with images
     cases = []
-    for case_entry in rejected_entries:
+    for case_entry in candidates_entries:
         images = []
         for image_path in case_entry.get('image_paths', []) or []:
             image_id = Path(str(image_path)).stem if image_path else None

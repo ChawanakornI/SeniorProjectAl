@@ -6,6 +6,7 @@ import '../features/case/api_config.dart';
 import '../features/case/annotate_screen.dart';
 import '../features/case/case_service.dart';
 import '../routes.dart';
+import '../widgets/calendar_widget.dart';
 
 class LabelPage extends StatefulWidget {
   const LabelPage({super.key});
@@ -153,6 +154,7 @@ class _LabelPageState extends State<LabelPage> {
   bool isLoading = true;
   String errorMessage = '';
   Map<String, dynamic>? retrainStatus;
+  DateTime? _selectedDate;
 
   double calculateImageMargin(List<Map<String, dynamic>> predictions) {
     if (predictions.length < 2) return 1.0;
@@ -160,6 +162,42 @@ class _LabelPageState extends State<LabelPage> {
       ..sort((a, b) => ((b['confidence'] as num?)?.toDouble() ?? 0)
           .compareTo((a['confidence'] as num?)?.toDouble() ?? 0));
     return (sorted[0]['confidence'] as num).toDouble() - (sorted[1]['confidence'] as num).toDouble();
+  }
+
+  /// Check if a given date has any samples
+  /// Note: Active learning samples might not have date fields, in which case this always returns false
+  bool _hasSamplesOnDate(DateTime date) {
+    return uncertainSamples.any((sample) {
+      final sampleDate = sample['created_at'] ?? sample['timestamp'] ?? sample['date'];
+      if (sampleDate == null) return false;
+      try {
+        final d = DateTime.parse(sampleDate.toString()).toLocal();
+        return d.year == date.year && d.month == date.month && d.day == date.day;
+      } catch (_) {
+        return false;
+      }
+    });
+  }
+
+  /// Get filtered samples based on selected date
+  /// If no date is selected, returns all samples
+  /// If samples don't have date fields, filtering won't work (returns all samples)
+  List<Map<String, dynamic>> get filteredSamples {
+    if (_selectedDate == null) return uncertainSamples;
+
+    return uncertainSamples.where((sample) {
+      final sampleDate = sample['created_at'] ?? sample['timestamp'] ?? sample['date'];
+      if (sampleDate == null) return true; // If no date field, show all samples
+
+      try {
+        final d = DateTime.parse(sampleDate.toString()).toLocal();
+        return d.year == _selectedDate!.year &&
+               d.month == _selectedDate!.month &&
+               d.day == _selectedDate!.day;
+      } catch (_) {
+        return true; // If date parsing fails, include the sample
+      }
+    }).toList();
   }
 
   @override
@@ -497,6 +535,17 @@ class _LabelPageState extends State<LabelPage> {
                 ),
               ),
             ],
+            // Calendar section
+            CalendarWidget(
+              selectedDate: _selectedDate,
+              onDateSelected: (date) {
+                setState(() {
+                  _selectedDate = date;
+                });
+              },
+              hasIndicatorForDate: _hasSamplesOnDate,
+              isDark: isDark,
+            ),
             // Main content
             Expanded(
               child: Builder(
@@ -544,7 +593,7 @@ class _LabelPageState extends State<LabelPage> {
                     );
                   }
 
-                  if (uncertainSamples.isEmpty) {
+                  if (filteredSamples.isEmpty) {
                     return Center(
                       child: Padding(
                         padding: const EdgeInsets.all(32),
@@ -552,21 +601,23 @@ class _LabelPageState extends State<LabelPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              Icons.check_circle_outline,
+                              Icons.disabled_by_default,
                               size: 64,
-                              color: Colors.green[400],
+                              color: Colors.red,
                             ),
                             const SizedBox(height: 16),
-                            const Text(
-                              'All caught up!',
-                              style: TextStyle(
+                            Text(
+                              _selectedDate != null ? 'No samples for this date' : 'All caught up!',
+                              style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'No uncertain samples available for labeling at this time.',
+                              _selectedDate != null
+                                  ? 'No uncertain samples available for the selected date.'
+                                  : 'No uncertain samples available for labeling at this time.',
                               style: TextStyle(
                                 color: Colors.grey[600],
                                 fontSize: 16,
@@ -581,9 +632,9 @@ class _LabelPageState extends State<LabelPage> {
 
                   return ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: uncertainSamples.length,
+                    itemCount: filteredSamples.length,
                     itemBuilder: (context, index) {
-                      final sample = uncertainSamples[index];
+                      final sample = filteredSamples[index];
                       final predictions = List<Map<String, dynamic>>.from(sample['predictions'] ?? []);
                       final margin = sample['margin'] ?? 0.0;
                       final images = List<Map<String, dynamic>>.from(sample['images'] ?? []);

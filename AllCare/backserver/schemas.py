@@ -55,6 +55,7 @@ class CaseLog(BaseModel):
     symptoms: List[str] = Field(default_factory=list)
     image_paths: List[str] = Field(default_factory=list)  # Paths to captured images
     created_at: Optional[str] = None  # ISO format timestamp
+    isLabeled: Optional[bool] = False # this is for checking whether image have been labeled or not [ labeled mean annotated or changed by user in annotate screen]
 
 
 class CaseIdRelease(BaseModel):

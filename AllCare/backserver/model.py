@@ -16,32 +16,33 @@ try:
     import torch.nn as nn  # type: ignore
     from torchvision import models  # type: ignore
 
-    # Make inference deterministic/reproducible
-    torch.manual_seed(0)
-    np.random.seed(0)
-    torch.set_num_threads(1)
-    # cuDNN/cuda knobs for determinism
-    try:
-        torch.backends.cudnn.deterministic = True  # type: ignore[attr-defined]
-        torch.backends.cudnn.benchmark = False  # type: ignore[attr-defined]
-    except Exception:
-        pass
-    try:
-        torch.backends.cuda.matmul.allow_tf32 = False  # type: ignore[attr-defined]
-        torch.backends.cudnn.allow_tf32 = False  # type: ignore[attr-defined]
-    except Exception:
-        pass
-    try:
-        torch.set_num_interop_threads(1)
-    except Exception:
-        pass
-    # Full determinism can be opt-in; avoid hard failure on unsupported ops.
-    try:
-        torch.use_deterministic_algorithms(True)
-        print("[model] Deterministic algorithms enabled successfully")
-    except Exception as e:
-        print(f"[model] Warning: Could not enable deterministic algorithms: {e}")
-        print("[model] Falling back to standard algorithms - some operations may be non-deterministic")
+    # # Make inference deterministic/reproducible
+    # torch.manual_seed(0)
+    # np.random.seed(0)
+    # torch.set_num_threads(1)
+    # # cuDNN/cuda knobs for determinism
+    # try:
+    #     torch.backends.cudnn.deterministic = True  # type: ignore[attr-defined]
+    #     torch.backends.cudnn.benchmark = False  # type: ignore[attr-defined]
+    # except Exception:
+    #     pass
+#     try:
+#         torch.backends.cuda.matmul.allow_tf32 = False  # type: ignore[attr-defined]
+#         torch.backends.cudnn.allow_tf32 = False  # type: ignore[attr-defined]
+#     except Exception:
+#         pass
+#     try:
+#         torch.set_num_interop_threads(1)
+#     except Exception:
+#         pass
+#     # Full determinism can be opt-in; avoid hard failure on unsupported ops.
+#     try:
+#         torch.use_deterministic_algorithms(False)
+#         # print("[model] Deterministic algorithms enabled successfully")
+#         print("disable deterministic algo successfully")
+#     except Exception as e:
+#         print(f"[model] Warning: Could not enable deterministic algorithms: {e}")
+#         print("[model] Falling back to standard algorithms - some operations may be non-deterministic")
 except ImportError:
     torch = None
     nn = None
@@ -111,9 +112,9 @@ class ModelService:
                 model.load_state_dict(state_dict)
                 model.to(self.device).eval()
                 
-                # Ensure deterministic behavior
-                if hasattr(model, 'apply'):
-                    model.apply(self._set_deterministic_flags)
+                # # Ensure deterministic behavior
+                # if hasattr(model, 'apply'):
+                #     model.apply(self._set_deterministic_flags)
                 
                 self.model = model
                 print(f"[model] loaded resnet50 checkpoint from {self.model_path}")
@@ -121,8 +122,8 @@ class ModelService:
             # If the loaded object is already a module, use it directly
             if hasattr(checkpoint, "eval") and callable(getattr(checkpoint, "eval")):
                 checkpoint.to(self.device).eval()
-                if hasattr(checkpoint, 'apply'):
-                    checkpoint.apply(self._set_deterministic_flags)
+                # if hasattr(checkpoint, 'apply'):
+                #     checkpoint.apply(self._set_deterministic_flags)
                 self.model = checkpoint
                 print(f"[model] loaded torch model object from {self.model_path}")
                 return
@@ -131,18 +132,18 @@ class ModelService:
 
         print("[model] unable to load model; running in dummy mode.")
 
-    def _set_deterministic_flags(self, module):
-        """
-        Set flags to ensure deterministic behavior for all modules.
-        This is especially important for dropout layers and other stochastic operations.
-        """
-        if isinstance(module, (nn.Dropout, nn.Dropout2d, nn.Dropout3d)):
-            # Ensure dropout is disabled during inference
-            module.train(False)
+    # def _set_deterministic_flags(self, module):
+    #     """
+    #     Set flags to ensure deterministic behavior for all modules.
+    #     This is especially important for dropout layers and other stochastic operations.
+    #     """
+    #     if isinstance(module, (nn.Dropout, nn.Dropout2d, nn.Dropout3d)):
+    #         # Ensure dropout is disabled during inference
+    #         module.train(False)
         
-        # For other modules, ensure they're in eval mode
-        if hasattr(module, 'train'):
-            module.train(False)
+    #     # For other modules, ensure they're in eval mode
+    #     if hasattr(module, 'train'):
+    #         module.train(False)
 
     def _select_device(self) -> str:
         """

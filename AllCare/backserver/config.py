@@ -11,7 +11,7 @@ def _get_env_list(key: str, default: str = "") -> List[str]:
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "assets" / "models" / "ham10000_resnet50_tuned_best.pt"
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "assets" / "models" / "ham10000_efficientnet_v2_m_7class_5_torchscript.pt"
 
 BACKSERVER_HOST: str = os.getenv("BACKSERVER_HOST", "0.0.0.0")
 BACKSERVER_PORT: int = int(os.getenv("BACKSERVER_PORT", "8000"))
