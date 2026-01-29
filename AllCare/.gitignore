@@ -106,8 +106,11 @@ venv/
 __pycache__/
 backserver/storage/
 backserver/storage/metadata.jsonl
-assets/models/
+# assets/models/
 
 # Environment / secrets
 .env
 .env.*
+
+2026-01-15-local-command-caveatcaveat-the-messages-below-w.txt
+2026-01-16-on-containerization.txt
