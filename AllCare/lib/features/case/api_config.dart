@@ -64,6 +64,42 @@ class ApiConfig {
   /// Authentication login endpoint
   static Uri get authLoginUri => Uri.parse('$baseUrl/auth/login');
 
+  // ==========================================================================
+  // Admin - Active Learning Endpoints
+  // ==========================================================================
+
+  /// Training configuration endpoints
+  static Uri get adminTrainingConfigUri => Uri.parse('$baseUrl/admin/training-config');
+
+  /// List all models
+  static Uri get adminModelsUri => Uri.parse('$baseUrl/admin/models');
+
+  /// Get production model info
+  static Uri get adminProductionModelUri => Uri.parse('$baseUrl/admin/models/production');
+
+  /// Promote a specific model
+  static Uri adminPromoteModelUri(String versionId) =>
+      Uri.parse('$baseUrl/admin/models/$versionId/promote');
+
+  /// Rollback to a specific model
+  static Uri adminRollbackModelUri(String versionId) =>
+      Uri.parse('$baseUrl/admin/models/$versionId/rollback');
+
+  /// Trigger retraining
+  static Uri get adminRetrainTriggerUri => Uri.parse('$baseUrl/admin/retrain/trigger');
+
+  /// Get retraining status
+  static Uri get adminRetrainStatusUri => Uri.parse('$baseUrl/admin/retrain/status');
+
+  /// Get AL events
+  static Uri get adminEventsUri => Uri.parse('$baseUrl/admin/events');
+
+  /// Get label counts
+  static Uri get adminLabelsCountUri => Uri.parse('$baseUrl/admin/labels/count');
+
+  /// Get labels list
+  static Uri get adminLabelsUri => Uri.parse('$baseUrl/admin/labels');
+
   /// User context headers (legacy - kept for backward compatibility)
   static const String userIdHeader = 'X-User-Id';
   static const String userRoleHeader = 'X-User-Role';

@@ -106,7 +106,7 @@ venv/
 __pycache__/
 backserver/storage/
 backserver/storage/metadata.jsonl
-# assets/models/
+assets/models/
 
 # Environment / secrets
 .env

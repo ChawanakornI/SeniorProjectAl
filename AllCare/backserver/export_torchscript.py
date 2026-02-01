@@ -8,7 +8,7 @@ without re-constructing a hard-coded architecture (e.g., ResNet50).
 Typical usage (CPU-only):
   python backserver/export_torchscript.py \
     --checkpoint path/to/checkpoint.pt \
-    --output assets/models/my_model_torchscript.pt \
+    --output assets/models/_torchscript.pt \
     --factory my_training_pkg.models:build_model \
     --example-shape 1,3,224,224
 """

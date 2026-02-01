@@ -245,7 +245,7 @@ class _CameraScreenState extends State<CameraScreen> {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
-         final isDark =
+        final isDark =
       Theme.of(dialogContext).brightness == Brightness.dark;
         return Dialog(
           shape: RoundedRectangleBorder(

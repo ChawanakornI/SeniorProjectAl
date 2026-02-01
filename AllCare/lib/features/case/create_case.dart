@@ -605,26 +605,41 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     );
   }
 
-  Widget _buildImagePreviewGrid(bool isDark) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _selectedImagePaths.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1,
-      ),
-      itemBuilder: (context, index) {
-        final path = _selectedImagePaths[index];
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: SizedBox.expand(child: _buildImageThumbnail(path, isDark)),
-        );
-      },
+
+  Widget _buildSingleImage(bool isDark)
+  {
+    final path = _selectedImagePaths.first;
+
+    return Center(child: ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 150,
+        height: 150,
+        child: _buildImageThumbnail(path, isDark)
+      )
+    ),
     );
   }
+  // Widget _buildImagePreviewGrid(bool isDark) {
+  //   return GridView.builder(
+  //     shrinkWrap: true,
+  //     physics: const NeverScrollableScrollPhysics(),
+  //     itemCount: _selectedImagePaths.length,
+  //     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+  //       crossAxisCount: 3,
+  //       crossAxisSpacing: 10,
+  //       mainAxisSpacing: 10,
+  //       childAspectRatio: 1,
+  //     ),
+  //     itemBuilder: (context, index) {
+  //       final path = _selectedImagePaths[index];
+  //       return ClipRRect(
+  //         borderRadius: BorderRadius.circular(10),
+  //         child: SizedBox.expand(child: _buildImageThumbnail(path, isDark)),
+  //       );
+  //     },
+  //   );
+  // }
 
   Widget _buildImageEmptyState(bool isDark) {
     return Container(
@@ -745,7 +760,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          count == 0 ? _buildImageEmptyState(isDark) : _buildImagePreviewGrid(isDark),
+          count == 0 ? _buildImageEmptyState(isDark) : _buildSingleImage(isDark),
         ],
       ),
     );

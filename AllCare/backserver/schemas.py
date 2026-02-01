@@ -169,3 +169,34 @@ ROLE_PERMISSIONS = {
 def get_user_permissions(role: UserRole) -> dict:
     """Get permissions dict for a given role."""
     return ROLE_PERMISSIONS.get(role, {})
+
+
+# =============================================================================
+# Active Learning Admin Schemas
+# =============================================================================
+
+class TrainingConfigRequest(BaseModel):
+    """Request body for updating training configuration."""
+    epochs: Optional[int] = Field(None, ge=1, le=100)
+    batch_size: Optional[int] = Field(None, ge=1, le=128)
+    learning_rate: Optional[float] = Field(None, ge=1e-6, le=1.0)
+    optimizer: Optional[str] = Field(None, pattern="^(Adam|SGD|AdamW|RMSprop)$")
+    dropout: Optional[float] = Field(None, ge=0.0, le=0.9)
+    augmentation_applied: Optional[bool] = None
+
+
+class ModelPromoteRequest(BaseModel):
+    """Request body for manual model promotion."""
+    reason: Optional[str] = "Manual promotion"
+
+
+class ModelRollbackRequest(BaseModel):
+    """Request body for model rollback."""
+    to_version: Optional[str] = None  # If None, rollback to most recent archived
+    reason: Optional[str] = "Manual rollback"
+
+
+class RetrainTriggerRequest(BaseModel):
+    """Request body for manually triggering retraining."""
+    architecture: Optional[str] = None  # Override architecture (efficientnet_v2_m or resnet50)
+    force: bool = False  # Force even if below threshold

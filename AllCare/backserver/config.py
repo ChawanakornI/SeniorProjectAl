@@ -11,7 +11,7 @@ def _get_env_list(key: str, default: str = "") -> List[str]:
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "assets" / "models" / "ham10000_efficientnet_v2_m_7class_5_torchscript.pt"
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "assets" / "models" / "ham10000_efficientnetV2m_7class_torchscript.pt"
 
 BACKSERVER_HOST: str = os.getenv("BACKSERVER_HOST", "0.0.0.0")
 BACKSERVER_PORT: int = int(os.getenv("BACKSERVER_PORT", "8000"))
@@ -48,3 +48,34 @@ JWT_EXPIRATION_HOURS: int = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
 
 # User storage file path
 USERS_FILE: str = os.getenv("USERS_FILE", os.path.join(os.path.dirname(__file__), "users.json"))
+
+# Active Learning (AL) workspace configuration
+AL_WORKSPACE_ROOT: str = os.path.join(os.path.dirname(__file__), "AL_Back")
+AL_MODELS_DIR: str = os.path.join(AL_WORKSPACE_ROOT, "models")
+AL_PRODUCTION_DIR: str = os.path.join(AL_MODELS_DIR, "production")
+AL_CANDIDATES_DIR: str = os.path.join(AL_MODELS_DIR, "candidates")
+AL_ARCHIVE_DIR: str = os.path.join(AL_MODELS_DIR, "archive")
+AL_MODEL_REGISTRY_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "db", "model_registry.json")
+AL_LABELS_POOL_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "db", "labels_pool.jsonl")
+AL_EVENT_LOG_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "db", "event_log.jsonl")
+AL_ACTIVE_CONFIG_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "config", "active_config.json")
+
+# Label map for skin lesion classification (HAM10000 classes)
+LABEL_MAP: dict = {
+    "akiec": 0, "bcc": 1, "bkl": 2, "df": 3, "mel": 4, "nv": 5, "vasc": 6
+}
+REVERSE_LABEL_MAP: dict = {v: k for k, v in LABEL_MAP.items()}
+
+# Supported model architectures for Active Learning
+class ModelArchitecture:
+    EFFICIENTNET_V2_M = "efficientnet_v2_m"
+    RESNET50 = "resnet50"
+
+# Default architecture for new AL training
+AL_DEFAULT_ARCHITECTURE: str = os.getenv("AL_DEFAULT_ARCHITECTURE", ModelArchitecture.EFFICIENTNET_V2_M)
+
+# Base model paths for transfer learning (non-TorchScript checkpoints)
+AL_BASE_MODELS: dict = {
+    ModelArchitecture.EFFICIENTNET_V2_M: str(PROJECT_ROOT / "assets" / "models" / "ham10000_efficientNetV2m_7Class.pt"),
+    ModelArchitecture.RESNET50: str(PROJECT_ROOT / "assets" / "models" / "ham10000_resnet50_7Class.pt"),
+}

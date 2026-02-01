@@ -20,7 +20,12 @@ from . import crypto_utils
 from .model import ModelService
 
 from .AL import get_active_learning_candidates
-from .retrain_model import get_retrain_status
+from .retrain_model import get_retrain_status, retrain_model, check_retrain_threshold
+from . import model_registry
+from . import training_config
+from . import labels_pool
+from . import event_log
+from . import auto_promote
 from .schemas import (
     CheckImageResponse,
     CaseLog,
@@ -32,6 +37,10 @@ from .schemas import (
     TokenResponse,
     UserInfo,
     AnnotationSubmission,
+    TrainingConfigRequest,
+    ModelPromoteRequest,
+    ModelRollbackRequest,
+    RetrainTriggerRequest,
 )
 app = FastAPI()
 
@@ -961,6 +970,240 @@ async def get_active_learning_candidates_endpoint(payload: Dict[str, Any], user_
 
     result = get_active_learning_candidates(cases, top_k)
     return result
+
+
+# =============================================================================
+# Admin Endpoints - Active Learning Model Management
+# =============================================================================
+
+def require_admin_role(user_context: Dict[str, str] = Depends(get_user_context)):
+    """Dependency to ensure user has admin role."""
+    if user_context.get("user_role", "").lower() != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    return user_context
+
+
+@app.get("/admin/training-config", dependencies=[Depends(require_api_key)])
+async def get_training_config(user_context: Dict[str, str] = Depends(require_admin_role)):
+    """Get current training configuration."""
+    current_config = training_config.load_config()
+    return {
+        "status": "ok",
+        "config": current_config,
+        "defaults": training_config.get_default_config()
+    }
+
+
+@app.post("/admin/training-config", dependencies=[Depends(require_api_key)])
+async def update_training_config(
+    payload: TrainingConfigRequest,
+    user_context: Dict[str, str] = Depends(require_admin_role)
+):
+    """Update training configuration."""
+    # Build config dict from non-None fields
+    new_config = {k: v for k, v in payload.model_dump().items() if v is not None}
+
+    if not new_config:
+        raise HTTPException(status_code=400, detail="No configuration values provided")
+
+    # Validate
+    is_valid, errors = training_config.validate_config(new_config)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail={"validation_errors": errors})
+
+    # Save
+    training_config.save_config(new_config)
+    event_log.log_config_updated(new_config)
+
+    return {
+        "status": "ok",
+        "message": "Training configuration updated",
+        "config": training_config.load_config()
+    }
+
+
+@app.get("/admin/models", dependencies=[Depends(require_api_key)])
+async def list_models(
+    status: Optional[str] = None,
+    user_context: Dict[str, str] = Depends(require_admin_role)
+):
+    """List all models, optionally filtered by status."""
+    models = model_registry.list_models(status=status)
+    production = model_registry.get_production_model()
+
+    return {
+        "status": "ok",
+        "models": models,
+        "current_production": production["version_id"] if production else None,
+        "total": len(models)
+    }
+
+
+@app.get("/admin/models/production", dependencies=[Depends(require_api_key)])
+async def get_production_model(user_context: Dict[str, str] = Depends(require_admin_role)):
+    """Get current production model info."""
+    production = model_registry.get_production_model()
+
+    if not production:
+        return {
+            "status": "ok",
+            "production_model": None,
+            "message": "No production model deployed"
+        }
+
+    return {
+        "status": "ok",
+        "production_model": production
+    }
+
+
+@app.post("/admin/models/{version_id}/promote", dependencies=[Depends(require_api_key)])
+async def promote_model(
+    version_id: str,
+    payload: ModelPromoteRequest,
+    user_context: Dict[str, str] = Depends(require_admin_role)
+):
+    """Manually promote a model to production."""
+    result = auto_promote.manual_promote(version_id, payload.reason)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Promotion failed"))
+
+    return {
+        "status": "ok",
+        "message": f"Model {version_id} promoted to production",
+        **result
+    }
+
+
+@app.post("/admin/models/{version_id}/rollback", dependencies=[Depends(require_api_key)])
+async def rollback_model(
+    version_id: str,
+    payload: ModelRollbackRequest,
+    user_context: Dict[str, str] = Depends(require_admin_role)
+):
+    """Rollback to a specific model version."""
+    result = auto_promote.trigger_rollback(to_version=version_id, reason=payload.reason)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Rollback failed"))
+
+    return {
+        "status": "ok",
+        "message": f"Rolled back to model {version_id}",
+        **result
+    }
+
+
+@app.post("/admin/retrain/trigger", dependencies=[Depends(require_api_key)])
+async def trigger_retrain(
+    payload: RetrainTriggerRequest,
+    user_context: Dict[str, str] = Depends(require_admin_role)
+):
+    """Manually trigger model retraining."""
+    # Check threshold unless forced
+    if not payload.force:
+        should_retrain, current, threshold = check_retrain_threshold()
+        if not should_retrain:
+            return {
+                "status": "skipped",
+                "reason": "Below threshold",
+                "current_labels": current,
+                "threshold": threshold,
+                "message": "Use force=true to override"
+            }
+
+    # Start retraining (this is synchronous for now - consider background task for production)
+    result = retrain_model(architecture=payload.architecture)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Retraining failed"))
+
+    # Auto-evaluate and promote if successful
+    if result.get("success"):
+        eval_result = auto_promote.evaluate_and_promote(
+            result["version_id"],
+            auto_promote=True
+        )
+        result["promotion_result"] = eval_result
+
+    return {
+        "status": "ok",
+        "message": "Retraining completed",
+        **result
+    }
+
+
+@app.get("/admin/retrain/status", dependencies=[Depends(require_api_key)])
+async def get_retrain_status_endpoint(user_context: Dict[str, str] = Depends(require_admin_role)):
+    """Get current retraining status."""
+    status = get_retrain_status()
+    threshold_info = check_retrain_threshold()
+
+    return {
+        "status": "ok",
+        "retrain_status": status,
+        "threshold": {
+            "should_retrain": threshold_info[0],
+            "current_labels": threshold_info[1],
+            "required": threshold_info[2]
+        }
+    }
+
+
+@app.get("/admin/events", dependencies=[Depends(require_api_key)])
+async def get_events(
+    limit: int = 50,
+    event_type: Optional[str] = None,
+    user_context: Dict[str, str] = Depends(require_admin_role)
+):
+    """Get recent AL events."""
+    if event_type:
+        events = event_log.get_events_by_type(event_type, limit=limit)
+    else:
+        events = event_log.get_recent_events(limit=limit)
+
+    return {
+        "status": "ok",
+        "events": events,
+        "total": len(events)
+    }
+
+
+@app.get("/admin/labels/count", dependencies=[Depends(require_api_key)])
+async def get_label_count(user_context: Dict[str, str] = Depends(require_admin_role)):
+    """Get current label counts."""
+    total = labels_pool.get_label_count()
+    unused = labels_pool.get_unused_label_count()
+    threshold = config.RETRAIN_MIN_NEW_LABELS
+
+    return {
+        "status": "ok",
+        "total_labels": total,
+        "unused_labels": unused,
+        "used_labels": total - unused,
+        "retrain_threshold": threshold,
+        "ready_for_retrain": unused >= threshold
+    }
+
+
+@app.get("/admin/labels", dependencies=[Depends(require_api_key)])
+async def get_labels(
+    limit: int = 100,
+    unused_only: bool = False,
+    user_context: Dict[str, str] = Depends(require_admin_role)
+):
+    """Get labels from the pool."""
+    if unused_only:
+        labels = labels_pool.get_unused_labels()
+    else:
+        labels = labels_pool.get_all_labels()
+
+    return {
+        "status": "ok",
+        "labels": labels[:limit],
+        "total": len(labels)
+    }
 
 
 model_service = ModelService(conf_threshold=config.CONF_THRESHOLD)
