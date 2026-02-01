@@ -3,16 +3,16 @@
 ![Project Status Badge](https://img.shields.io/badge/status-in_development-yellow?style=flat-square)
 
 ## Overview
-- Our senior project focused on reducing manual labeling workload for medical professionals.
-  ALLCARE applies active learning to surface the most informative unlabeled cases for review.
-  The goal is to accelerate accurate decision making while keeping the clinician in full control.
+- Our senior project focused on reducing manual labeling workload for medical professionals. </br>
+  ALLCARE applies active learning to surface the most informative unlabeled cases for review.</br>
+  The goal is to accelerate accurate decision making while keeping the clinician in full control.</br>
 
 
 ## Active Learning Flow
 -- Under development --
 
 ## UX/UI Design
--- Under development --
+[Photo in sequence in Google Drive](https://drive.google.com/drive/folders/1bou2JPzi6YnuEkhFfqoSYSjJ4LBE2Hhe?usp=share_link)
 
 ## Documentation & Planning
 - `Requirements.md` — functional and technical expectations.
