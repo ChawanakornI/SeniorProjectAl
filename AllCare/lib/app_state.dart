@@ -1,13 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
-
-/// Global accessor for services without BuildContext (e.g., API services).
-/// Widgets should use context.watch<AppState>() or context.read<AppState>() instead.
-/// This is set in main.dart after creating the AppState instance.
-late AppState appState;
 
 class AppState extends ChangeNotifier {
   String _language = 'English';

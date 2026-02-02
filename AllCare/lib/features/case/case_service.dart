@@ -92,10 +92,9 @@ class CaseRecord {
 
 /// Service for managing case records via the backend API.
 class CaseService {
-  /// Singleton instance
-  static final CaseService _instance = CaseService._internal();
-  factory CaseService() => _instance;
-  CaseService._internal();
+  CaseService(this._appState);
+
+  final AppState _appState;
 
   /// Fetch all cases from the backend.
   /// Optionally filter by status: 'Confirmed', 'Rejected', 'pending', etc.
@@ -114,9 +113,9 @@ class CaseService {
       log('Calling: $uri', name: 'CaseService');
 
       final headers = ApiConfig.buildHeaders(
-        token: appState.accessToken,
-        userId: appState.userId,
-        userRole: appState.userRole,
+        token: _appState.accessToken,
+        userId: _appState.userId,
+        userRole: _appState.userRole,
       );
 
       final response = await http
@@ -161,9 +160,9 @@ class CaseService {
 
     try {
       final headers = ApiConfig.buildHeaders(
-        token: appState.accessToken,
-        userId: appState.userId,
-        userRole: appState.userRole,
+        token: _appState.accessToken,
+        userId: _appState.userId,
+        userRole: _appState.userRole,
       );
 
       final response = await http
@@ -200,9 +199,9 @@ class CaseService {
     try {
       final headers = ApiConfig.buildHeaders(
         json: true,
-        token: appState.accessToken,
-        userId: appState.userId,
-        userRole: appState.userRole,
+        token: _appState.accessToken,
+        userId: _appState.userId,
+        userRole: _appState.userRole,
       );
 
       final response = await http
@@ -248,9 +247,9 @@ class CaseService {
     try {
       final headers = ApiConfig.buildHeaders(
         json: true,
-        token: appState.accessToken,
-        userId: appState.userId,
-        userRole: appState.userRole,
+        token: _appState.accessToken,
+        userId: _appState.userId,
+        userRole: _appState.userRole,
       );
 
       final body = jsonEncode({
@@ -311,9 +310,9 @@ class CaseService {
     try {
       final headers = ApiConfig.buildHeaders(
         json: true,
-        token: appState.accessToken,
-        userId: appState.userId,
-        userRole: appState.userRole,
+        token: _appState.accessToken,
+        userId: _appState.userId,
+        userRole: _appState.userRole,
       );
 
       final uri = Uri.parse('${ApiConfig.baseUrl}/cases/$caseId');
@@ -355,9 +354,9 @@ class CaseService {
     try {
       final headers = ApiConfig.buildHeaders(
         json: true,
-        token: appState.accessToken,
-        userId: appState.userId,
-        userRole: appState.userRole,
+        token: _appState.accessToken,
+        userId: _appState.userId,
+        userRole: _appState.userRole,
       );
 
       final body = jsonEncode({
@@ -412,7 +411,7 @@ class CaseService {
     String? caseUserId,
     String? notes,
   }) async {
-    final role = appState.userRole.trim().toLowerCase();
+    final role = _appState.userRole.trim().toLowerCase();
     if (role == 'gp') {
       log('Blocked GP annotation attempt for case $caseId', name: 'CaseService');
       throw Exception('GP role is not allowed to annotate rejected cases');
@@ -423,9 +422,9 @@ class CaseService {
     try {
       final headers = ApiConfig.buildHeaders(
         json: true,
-        token: appState.accessToken,
-        userId: appState.userId,
-        userRole: appState.userRole,
+        token: _appState.accessToken,
+        userId: _appState.userId,
+        userRole: _appState.userRole,
       );
       final body = jsonEncode({
         'image_index': imageIndex,

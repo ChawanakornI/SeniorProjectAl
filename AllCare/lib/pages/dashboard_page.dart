@@ -394,7 +394,7 @@ class _DashboardPageState extends State<DashboardPage>
     setState(() => _isLoading = true);
 
     try {
-      final cases = await CaseService().fetchCases();
+      final cases = await context.read<CaseService>().fetchCases();
       if (mounted) {
         setState(() {
           _cases = cases;
@@ -1669,4 +1669,3 @@ class _DashboardPageState extends State<DashboardPage>
   }
 
 }
-

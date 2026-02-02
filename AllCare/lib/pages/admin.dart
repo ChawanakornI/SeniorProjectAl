@@ -1308,7 +1308,7 @@ class _AdminPageState extends State<AdminPage> {
     if (!context.mounted) return;
     if (result == true) {
       // Clear user session data
-      appState.clearUserSession();
+      context.read<AppState>().clearUserSession();
 
       // Navigate to login and remove all previous routes
       Navigator.of(context).pushNamedAndRemoveUntil(
@@ -1539,7 +1539,7 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   void _showDeploymentSuccessDialog(Map<String, dynamic> responseData) {
-    final isDark = appState.isDarkMode;
+    final isDark = context.read<AppState>().isDarkMode;
     final config = responseData['config'] as Map<String, dynamic>?;
 
     showDialog(

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../theme/glass.dart';
 import 'api_config.dart';
 import 'prediction_service.dart';
@@ -276,7 +277,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
 
     try {
       // Run prediction
-      final predictionResult = await PredictionService().predictMultiple(
+      final predictionResult = await context.read<PredictionService>().predictMultiple(
         _allImagePaths,
         caseId: widget.caseId,
       );

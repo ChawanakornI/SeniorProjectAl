@@ -5,6 +5,7 @@ import 'dart:io'; // สำหรับ Platform check
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http; // Import http
+import 'package:provider/provider.dart';
 import 'api_config.dart'; // Shared API configuration
 import 'camera_globals.dart'; // Import เพื่อเรียกใช้ตัวแปร 'cameras'
 import 'photo_preview_screen.dart'; // Import หน้า Preview (ต้องมีไฟล์นี้)
@@ -104,6 +105,7 @@ class _CameraScreenState extends State<CameraScreen> {
       var request = http.MultipartRequest('POST', uri);
       request.files.add(await http.MultipartFile.fromPath('file', imagePath));
 
+      final appState = context.read<AppState>();
       request.headers.addAll(
         ApiConfig.buildHeaders(
           userId: appState.userId,

@@ -5,6 +5,8 @@ import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'features/case/case_service.dart';
+import 'features/case/prediction_service.dart';
 import 'pages/home_page.dart';
 import 'pages/gp_home_page.dart';
 import 'routes.dart';
@@ -15,9 +17,6 @@ Future<void> main() async {
 
   // Create AppState instance for async initialization
   final appStateInstance = AppState();
-
-  // Set global accessor for services without BuildContext (hybrid approach)
-  appState = appStateInstance;
 
   // Load global persisted settings (theme, language, etc.)
   // User-specific data (profile, names) is loaded after login
@@ -43,8 +42,16 @@ Future<void> main() async {
   }
 
   runApp(
-    ChangeNotifierProvider.value(
-      value: appStateInstance,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: appStateInstance),
+        ProxyProvider<AppState, CaseService>(
+          update: (_, appState, __) => CaseService(appState),
+        ),
+        ProxyProvider<AppState, PredictionService>(
+          update: (_, appState, __) => PredictionService(appState),
+        ),
+      ],
       child: const MyApp(),
     ),
   );

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../features/case/api_config.dart';
 import '../features/case/annotate_screen.dart';
@@ -155,6 +156,7 @@ class _LabelPageState extends State<LabelPage> {
   String errorMessage = '';
   Map<String, dynamic>? retrainStatus;
   DateTime? _selectedDate;
+  AppState get _appState => context.read<AppState>();
 
   double calculateImageMargin(List<Map<String, dynamic>> predictions) {
     if (predictions.length < 2) return 1.0;
@@ -203,7 +205,7 @@ class _LabelPageState extends State<LabelPage> {
   @override
   void initState() {
     super.initState();
-    if (appState.userRole == 'gp') {
+    if (_appState.userRole == 'gp') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -215,7 +217,7 @@ class _LabelPageState extends State<LabelPage> {
     }
 
     fetchUncertainSamples();
-    if (appState.userRole == 'admin') {
+    if (_appState.userRole == 'admin') {
       fetchRetrainStatus();
     }
   }
@@ -232,8 +234,8 @@ class _LabelPageState extends State<LabelPage> {
         Uri.parse('${ApiConfig.baseUrl}/active-learning/candidates'),
         headers: ApiConfig.buildHeaders(
           json: true,
-          userId: appState.userId,
-          userRole: appState.userRole,
+          userId: _appState.userId,
+          userRole: _appState.userRole,
         ),
         body: json.encode({
           'top_k': 5,
@@ -266,8 +268,8 @@ class _LabelPageState extends State<LabelPage> {
         Uri.parse('${ApiConfig.baseUrl}/model/retrain-status'),
         headers: ApiConfig.buildHeaders(
           json: true,
-          userId: appState.userId,
-          userRole: appState.userRole,
+          userId: _appState.userId,
+          userRole: _appState.userRole,
         ),
       );
 
@@ -288,8 +290,8 @@ class _LabelPageState extends State<LabelPage> {
         Uri.parse('${ApiConfig.baseUrl}/model/retrain'),
         headers: ApiConfig.buildHeaders(
           json: true,
-          userId: appState.userId,
-          userRole: appState.userRole,
+          userId: _appState.userId,
+          userRole: _appState.userRole,
         ),
       );
 
@@ -341,7 +343,7 @@ class _LabelPageState extends State<LabelPage> {
     final caseUserId = (sample['user_id'] ?? '').toString().trim();
 
     // Block GP users from entering annotation flow for rejected cases
-    if (appState.userRole.toLowerCase() == 'gp' && entryType == 'reject') {
+    if (_appState.userRole.toLowerCase() == 'gp' && entryType == 'reject') {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('GP role is not allowed to annotate rejected cases')),
@@ -390,7 +392,7 @@ class _LabelPageState extends State<LabelPage> {
     }
 
     try {
-      await CaseService().saveAnnotations(
+      await context.read<CaseService>().saveAnnotations(
         caseId: caseId,
         imageIndex: (annotationResult['imageIndex'] as num?)?.toInt() ?? 0,
         correctLabel: label,
@@ -403,7 +405,7 @@ class _LabelPageState extends State<LabelPage> {
         uncertainSamples.removeWhere((c) => (c['case_id'] ?? '').toString() == caseId);
       });
 
-      if (appState.userRole.toLowerCase() == 'admin') {
+      if (_appState.userRole.toLowerCase() == 'admin') {
         fetchRetrainStatus();
       }
 
@@ -434,7 +436,7 @@ class _LabelPageState extends State<LabelPage> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          if (appState.userRole.toLowerCase() == 'admin') ...[
+          if (_appState.userRole.toLowerCase() == 'admin') ...[
             Container(
               margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
               child: ElevatedButton.icon(
@@ -477,7 +479,7 @@ class _LabelPageState extends State<LabelPage> {
         child: Column(
           children: [
             // Retrain status banner for admins
-            if (appState.userRole.toLowerCase() == 'admin' && retrainStatus != null) ...[
+            if (_appState.userRole.toLowerCase() == 'admin' && retrainStatus != null) ...[
               Container(
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(16),
@@ -748,8 +750,8 @@ class _LabelPageState extends State<LabelPage> {
                                                         fit: BoxFit.cover,
                                                         width: double.infinity,
                                                         headers: ApiConfig.buildHeaders(
-                                                          userId: appState.userId,
-                                                          userRole: appState.userRole,
+                                                          userId: _appState.userId,
+                                                          userRole: _appState.userRole,
                                                         ),
                                                         errorBuilder: (context, error, stackTrace) {
                                                           return Container(
@@ -887,7 +889,7 @@ class _LabelPageState extends State<LabelPage> {
                                 width: double.infinity,
                                 child: Builder(
                                   builder: (context) {
-                                    final isGp = appState.userRole.toLowerCase() == 'gp';
+                                    final isGp = _appState.userRole.toLowerCase() == 'gp';
                                     final isRejected = (sample['entry_type'] ?? '').toString().toLowerCase() == 'reject';
                                     final isDisabled = isGp && isRejected;
 

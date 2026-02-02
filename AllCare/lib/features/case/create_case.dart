@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../theme/glass.dart';
 import '../../theme/glass_inline_dropdown.dart';
@@ -131,10 +132,10 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     });
 
     try {
-      final caseId = await CaseService().fetchNextCaseId();
+      final caseId = await context.read<CaseService>().fetchNextCaseId();
       if (_releaseAfterLoad) {
         try {
-          await CaseService().releaseCaseId(caseId);
+          await context.read<CaseService>().releaseCaseId(caseId);
         } catch (_) {}
         return;
       }
@@ -173,7 +174,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     try {
       _updatedAt = DateTime.now().toIso8601String();
       if (widget.persistChanges) {
-        await CaseService().updateCase(
+        await context.read<CaseService>().updateCase(
           caseId: _caseId!,
           gender: _selectedGender,
           age: _selectedAge,
@@ -227,7 +228,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
 
     _releaseRequested = true;
     try {
-      await CaseService().releaseCaseId(caseId);
+      await context.read<CaseService>().releaseCaseId(caseId);
     } catch (_) {}
   }
 

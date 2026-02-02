@@ -2,6 +2,7 @@ import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../theme/glass.dart';
 import '../widgets/glass_bottom_nav.dart';
@@ -40,7 +41,7 @@ class _NotificationPageState extends State<NotificationPage> {
     });
 
     try {
-      final cases = await CaseService().fetchCases();
+      final cases = await context.read<CaseService>().fetchCases();
       if (mounted) {
         setState(() {
           _cases = cases;
@@ -647,4 +648,3 @@ class _NotificationPageState extends State<NotificationPage> {
   }
 
 }
-

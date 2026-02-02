@@ -44,7 +44,7 @@ Flutter mobile app + FastAPI backend for AI-assisted skin lesion diagnosis. The 
 
 | Layer | Technologies |
 |-------|-------------|
-| **Frontend** | Flutter 3.7+, Dart, Material 3, Glassmorphism theme |
+| **Frontend** | Flutter 3.7+, Dart, Material 3, Glassmorphism theme, Provider |
 | **Backend** | FastAPI, Uvicorn, Pydantic 2.x |
 | **ML/AI** | PyTorch 2.0+, torchvision, EfficientNetV2-M/ResNet50 |
 | **Image Processing** | OpenCV (blur detection), Pillow |
@@ -123,7 +123,7 @@ Credentials stored in `assets/mock_credentials.csv` (frontend) and `backserver/u
 ```
 lib/                              # Flutter frontend
 ├── main.dart                     # Entry point
-├── app_state.dart               # Global state (ChangeNotifier)
+├── app_state.dart               # AppState (ChangeNotifier via Provider)
 ├── pages/                       # UI pages
 │   ├── home_page.dart          # Doctor home
 │   ├── gp_home_page.dart       # GP home (limited)
@@ -237,7 +237,8 @@ The model classifies lesions into 7 categories:
 
 ## Design Patterns
 
-- **Singleton**: AppState (global state), ModelService (ML inference)
+- **Provider/ChangeNotifier**: AppState provided through the widget tree
+- **Singleton**: ModelService (backend ML inference)
 - **Service Layer**: CaseService, PredictionService abstract HTTP calls
 - **Repository**: model_registry, labels_pool, event_log for data access
 - **Factory**: create_model() for multi-architecture support

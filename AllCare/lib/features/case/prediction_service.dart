@@ -10,10 +10,9 @@ import '../../app_state.dart';
 /// 
 /// This service calls the FastAPI backend's /check-image endpoint
 class PredictionService {
-  /// Singleton instance
-  static final PredictionService _instance = PredictionService._internal();
-  factory PredictionService() => _instance;
-  PredictionService._internal();
+  PredictionService(this._appState);
+
+  final AppState _appState;
 
   /// Predict skin lesion classification for a single image.
   /// 
@@ -35,9 +34,9 @@ class PredictionService {
       
       request.headers.addAll(
         ApiConfig.buildHeaders(
-          token: appState.accessToken,
-          userId: appState.userId,
-          userRole: appState.userRole,
+          token: _appState.accessToken,
+          userId: _appState.userId,
+          userRole: _appState.userRole,
         ),
       );
 

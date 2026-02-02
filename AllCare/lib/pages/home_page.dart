@@ -83,7 +83,7 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      final cases = await CaseService().fetchCases();
+      final cases = await context.read<CaseService>().fetchCases();
       if (mounted) {
         setState(() {
           _caseRecords = cases;
@@ -225,7 +225,7 @@ class _HomePageState extends State<HomePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Header Section
-                          _buildHeader(isDark),
+                          _buildHeader(isDark, appState),
 
                           // Action Cards Section
                           _buildActionCards(isDark),
@@ -277,7 +277,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildHeader(bool isDark) {
+  Widget _buildHeader(bool isDark, AppState appState) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
       child: Column(

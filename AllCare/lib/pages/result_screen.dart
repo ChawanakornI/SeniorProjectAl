@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import '../app_state.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../theme/glass.dart';
 import '../features/case/case_service.dart';
@@ -966,7 +967,7 @@ class _ResultScreenState extends State<ResultScreen> {
                 child: OutlinedButton(
                   onPressed: () async {
                     try {
-                      await CaseService().rejectCase(
+                      await context.read<CaseService>().rejectCase(
                         caseId: widget.caseId,
                         reason: 'User rejected prediction',
                         notes: _noteWithDecisions(),
@@ -989,7 +990,8 @@ class _ResultScreenState extends State<ResultScreen> {
                     if (!mounted) return;
 
                     // Navigate to annotation screen and handle result
-                    final isGp = appState.userRole.toLowerCase() == 'gp';
+                    final isGp =
+                        context.read<AppState>().userRole.toLowerCase() == 'gp';
                     if (isGp && _isRejected) {
                       // _showActionSnack("GP cannot annotate rejected cases.");
                       Navigator.of(context).pop('rejected');
@@ -1008,7 +1010,7 @@ class _ResultScreenState extends State<ResultScreen> {
 
                     if (annotationResult != null && mounted) {
                       try {
-                        await CaseService().saveAnnotations(
+                        await context.read<CaseService>().saveAnnotations(
                           caseId: annotationResult['caseId'] as String,
                           imageIndex: annotationResult['imageIndex'] as int,
                           correctLabel: annotationResult['class'] as String,
@@ -1045,7 +1047,7 @@ class _ResultScreenState extends State<ResultScreen> {
                 child: OutlinedButton(
                   onPressed: () async {
                     try {
-                      await CaseService().logCase(
+                      await context.read<CaseService>().logCase(
                         caseId: widget.caseId,
                         predictions: widget.predictions,
                         status: 'pending',
@@ -1074,7 +1076,7 @@ class _ResultScreenState extends State<ResultScreen> {
                 child: ElevatedButton(
                   onPressed: () async {
                     try {
-                      await CaseService().logCase(
+                      await context.read<CaseService>().logCase(
                         caseId: widget.caseId,
                         predictions: widget.predictions,
                         status: 'Confirmed',
