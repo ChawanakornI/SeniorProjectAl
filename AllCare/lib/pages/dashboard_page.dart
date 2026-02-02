@@ -2,6 +2,7 @@ import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 //import 'package:fl_chart/fl_chart.dart';
 
 
@@ -610,9 +611,9 @@ class _DashboardPageState extends State<DashboardPage>
                 ),
               ),
               const SizedBox(width: 12),
-              ListenableBuilder(
-                listenable: appState,
-                builder: (context, _) {
+              // Profile avatar - uses Consumer to rebuild only this widget when profile changes
+              Consumer<AppState>(
+                builder: (context, appState, _) {
                   return GestureDetector(
                     onTap: () {
                       HapticFeedback.lightImpact();

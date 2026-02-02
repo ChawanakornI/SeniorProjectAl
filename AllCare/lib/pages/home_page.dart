@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import '../theme/glass.dart';
@@ -53,25 +54,23 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // Load cases from backend
+    _loadCases();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     // Determine effective showLabeling: prefer widget arg, fallback to AppState role
     if (widget.showLabeling != null) {
       _shouldShowLabeling = widget.showLabeling!;
     } else {
-      _shouldShowLabeling = appState.userRole.toLowerCase() != 'gp';
+      _shouldShowLabeling = context.read<AppState>().userRole.toLowerCase() != 'gp';
     }
-    appState.addListener(_onAppStateChanged);
-
-    // Start timer to update time every minute
-    // _timeTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-    //   if (mounted) {
-    //     setState(() {
-    //       _currentTime = DateTime.now();
-    //     });
-    //   }
-    // });
-
-    // Load cases from backend
-    _loadCases();
+    // Reload cases when dependencies change (including when returning to this page)
+    if (!_isLoadingCases && _caseRecords.isEmpty) {
+      _loadCases();
+    }
   }
 
   /// Load cases from backend
@@ -105,32 +104,13 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _timeTimer?.cancel();
-    appState.removeListener(_onAppStateChanged);
     _searchController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Reload cases when dependencies change (including when returning to this page)
-    if (!_isLoadingCases && _caseRecords.isEmpty) {
-      _loadCases();
-    }
   }
 
   /// Public method to refresh cases - can be called after returning from other screens
   void refreshCases() {
     _loadCases();
-  }
-
-  void _onAppStateChanged() {
-    if (mounted) {
-      if (widget.showLabeling == null) {
-        _shouldShowLabeling = appState.userRole != 'gp';
-      }
-      setState(() {});
-    }
   }
 
   void _navigateWithFade(Widget page, {bool replace = true}) {
@@ -215,6 +195,14 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Get AppState via Provider - widget rebuilds when state changes
+    final appState = context.watch<AppState>();
+
+    // Update _shouldShowLabeling reactively if widget.showLabeling is null
+    if (widget.showLabeling == null) {
+      _shouldShowLabeling = appState.userRole.toLowerCase() != 'gp';
+    }
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor =
         isDark ? Color.fromARGB(255, 0, 0, 0) : const Color(0xFFFBFBFB);
@@ -328,44 +316,40 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              ListenableBuilder(
-                listenable: appState,
-                builder: (context, _) {
-                  return GestureDetector(
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProfileSettingsPage(),
-                        ),
-                      );
-                    },
-                    child: ClipOval(
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: glassCircle(isDark, highlight: true),
-                          child: appState.profileImageFile != null
-                              ? ClipOval(
-                                  child: Image.file(
-                                    appState.profileImageFile!,
-                                    width: 50,
-                                    height: 50,
-                                    fit: BoxFit.cover,
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.person,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                        ),
-                      ),
+              // Profile avatar - appState is already watched above so this rebuilds automatically
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ProfileSettingsPage(),
                     ),
                   );
                 },
+                child: ClipOval(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: glassCircle(isDark, highlight: true),
+                      child: appState.profileImageFile != null
+                          ? ClipOval(
+                              child: Image.file(
+                                appState.profileImageFile!,
+                                width: 50,
+                                height: 50,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : Icon(
+                              Icons.person,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),

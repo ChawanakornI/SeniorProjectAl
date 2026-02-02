@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../routes.dart';
 import '../features/case/api_config.dart';
@@ -41,7 +42,7 @@ class _AdminPageState extends State<AdminPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = appState.isDarkMode;
+    final isDark = context.watch<AppState>().isDarkMode;
     final backgroundColor = isDark
         ? cannoliCream.withValues(alpha: 0.1)
         : cannoliCream;

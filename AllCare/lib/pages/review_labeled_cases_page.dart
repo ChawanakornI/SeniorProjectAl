@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../widgets/calendar_widget.dart';
 import '../features/case/annotate_screen.dart';
@@ -38,7 +39,7 @@ class _ReviewLabeledCasesPageState extends State<ReviewLabeledCasesPage> {
 
   /// Check if the current user has access to this page
   void _checkAccessControl() {
-    final role = appState.userRole.toLowerCase().trim();
+    final role = context.read<AppState>().userRole.toLowerCase().trim();
     if (role == 'gp') {
       // GPs are not allowed to access this page
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -480,8 +481,8 @@ class LabeledCaseCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: case_.agreement
-                ? Colors.green.withOpacity(0.1)
-                : Colors.orange.withOpacity(0.1),
+                ? Colors.green.withValues(alpha: .1)
+                : Colors.orange.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: case_.agreement ? Colors.green : Colors.orange,

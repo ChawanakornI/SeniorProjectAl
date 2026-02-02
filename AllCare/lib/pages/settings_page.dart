@@ -1,7 +1,7 @@
-
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import '../theme/glass.dart';
@@ -21,22 +21,6 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   int _currentBottomNavIndex = 3;
-
-  @override
-  void initState() {
-    super.initState();
-    appState.addListener(_onAppStateChanged);
-  }
-
-  @override
-  void dispose() {
-    appState.removeListener(_onAppStateChanged);
-    super.dispose();
-  }
-
-  void _onAppStateChanged() {
-    setState(() {});
-  }
 
   void _navigateTo(Widget page, int newIndex) {
     setState(() {
@@ -58,6 +42,9 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _confirmLogout(BuildContext context, bool isDark) async {
+    // Use read() in callbacks - no rebuild needed, just calling methods
+    final appState = context.read<AppState>();
+
     HapticFeedback.lightImpact();
     final result = await showDialog<bool>(
       context: context,
@@ -110,6 +97,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Get AppState via Provider - widget rebuilds when state changes
+    final appState = context.watch<AppState>();
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF050A16) : const Color(0xFFFBFBFB);
     final gradientColors = isDark
