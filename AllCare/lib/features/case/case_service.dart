@@ -20,6 +20,8 @@ class CaseRecord {
   final List<String> imagePaths; // Paths to captured images
   final String? createdAt;
   final String? updatedAt;
+  final bool isLabeled;
+  final String? correctLabel;
 
   CaseRecord({
     required this.caseId,
@@ -34,11 +36,17 @@ class CaseRecord {
     this.imagePaths = const [],
     this.createdAt,
     this.updatedAt,
+    this.isLabeled = false,
+    this.correctLabel,
   });
 
   factory CaseRecord.fromJson(Map<String, dynamic> json) {
     final rawStatus = (json['status'] as String?)?.trim();
     final entryType = (json['entry_type'] as String?)?.toLowerCase().trim() ?? '';
+    final correctLabel = json['correct_label'] as String?;
+    final isLabeled =
+        (json['isLabeled'] == true) ||
+        (correctLabel != null && correctLabel.trim().isNotEmpty);
 
     String resolvedStatus;
     if (entryType == 'reject') {
@@ -74,6 +82,8 @@ class CaseRecord {
           [],
       createdAt: json['created_at'] as String?,
       updatedAt: json['updated_at'] as String?,
+      isLabeled: isLabeled,
+      correctLabel: correctLabel,
     );
   }
 
@@ -393,6 +403,124 @@ class CaseService {
       throw Exception('Cannot connect to server.');
     } catch (e) {
       log('Error rejecting case: $e', name: 'CaseService');
+      rethrow;
+    }
+  }
+
+  /// Check whether a case is selected for active learning labeling.
+  /// Returns true if the case appears in the top-k uncertain candidates.
+  Future<bool> isActiveLearningCandidate({
+    required String caseId,
+    int topK = 5,
+    String? entryType,
+    String? status,
+  }) async {
+    log('Checking AL candidates for case $caseId', name: 'CaseService');
+
+    try {
+      final headers = ApiConfig.buildHeaders(
+        json: true,
+        token: _appState.accessToken,
+        userId: _appState.userId,
+        userRole: _appState.userRole,
+      );
+
+      final body = jsonEncode({
+        'top_k': topK,
+        if (entryType != null && entryType.trim().isNotEmpty)
+          'entry_type': entryType.trim(),
+        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+      });
+
+      final response = await http
+          .post(
+            ApiConfig.activeLearningCandidatesUri,
+            headers: headers,
+            body: body,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final candidates = (jsonResponse['candidates'] as List<dynamic>? ?? []);
+        for (final item in candidates) {
+          if (item is Map<String, dynamic>) {
+            final id = item['case_id']?.toString();
+            if (id == caseId) return true;
+          }
+        }
+        return false;
+      } else {
+        log(
+          'Failed to fetch AL candidates: ${response.statusCode}',
+          name: 'CaseService',
+        );
+        throw Exception(
+          'Failed to fetch AL candidates: ${response.statusCode}',
+        );
+      }
+    } on SocketException catch (e) {
+      log('Network error: $e', name: 'CaseService');
+      throw Exception('Cannot connect to server.');
+    } catch (e) {
+      log('Error checking AL candidates: $e', name: 'CaseService');
+      rethrow;
+    }
+  }
+
+  /// Fetch active learning candidates with margin scores.
+  Future<List<Map<String, dynamic>>> fetchActiveLearningCandidates({
+    int topK = 50,
+    String? entryType,
+    String? status,
+  }) async {
+    log('Fetching AL candidates (topK=$topK)', name: 'CaseService');
+
+    try {
+      final headers = ApiConfig.buildHeaders(
+        json: true,
+        token: _appState.accessToken,
+        userId: _appState.userId,
+        userRole: _appState.userRole,
+      );
+
+      final body = jsonEncode({
+        'top_k': topK,
+        if (entryType != null && entryType.trim().isNotEmpty)
+          'entry_type': entryType.trim(),
+        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+      });
+
+      final response = await http
+          .post(
+            ApiConfig.activeLearningCandidatesUri,
+            headers: headers,
+            body: body,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body) as Map<String, dynamic>;
+        final candidates =
+            (jsonResponse['candidates'] as List<dynamic>? ?? []);
+        return candidates
+            .whereType<Map<String, dynamic>>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      } else {
+        log(
+          'Failed to fetch AL candidates: ${response.statusCode}',
+          name: 'CaseService',
+        );
+        throw Exception(
+          'Failed to fetch AL candidates: ${response.statusCode}',
+        );
+      }
+    } on SocketException catch (e) {
+      log('Network error: $e', name: 'CaseService');
+      throw Exception('Cannot connect to server.');
+    } catch (e) {
+      log('Error fetching AL candidates: $e', name: 'CaseService');
       rethrow;
     }
   }

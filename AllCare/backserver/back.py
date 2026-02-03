@@ -923,6 +923,8 @@ async def get_active_learning_candidates_endpoint(payload: Dict[str, Any], user_
     """
     user_role = user_context.get("user_role", "").lower()
     top_k = payload.get('top_k', 5)
+    entry_type_filter = (payload.get('entry_type') or '').strip().lower()
+    status_filter = (payload.get('status') or '').strip().lower()
 
     # Get entries based on user role
     if user_role in {"doctor", "admin"}:
@@ -941,6 +943,16 @@ async def get_active_learning_candidates_endpoint(payload: Dict[str, Any], user_
         e for e in entries
         if not e.get('correct_label')
     ]
+    if entry_type_filter:
+        candidates_entries = [
+            e for e in candidates_entries
+            if (e.get('entry_type') or '').strip().lower() == entry_type_filter
+        ]
+    if status_filter:
+        candidates_entries = [
+            e for e in candidates_entries
+            if (e.get('status') or '').strip().lower() == status_filter
+        ]
     image_entries = {e['image_id']: e for e in entries if 'image_id' in e}
 
     # Build cases with images

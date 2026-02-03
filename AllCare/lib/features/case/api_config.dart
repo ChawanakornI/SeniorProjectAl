@@ -55,6 +55,10 @@ class ApiConfig {
   /// Reject case endpoint
   static Uri get rejectCaseUri => Uri.parse('$baseUrl/cases/reject');
 
+  /// Active learning candidates (uncertainty sampling)
+  static Uri get activeLearningCandidatesUri =>
+      Uri.parse('$baseUrl/active-learning/candidates');
+
   // (bridge-frontend-backend): Add annotations endpoint
   // This endpoint saves manual annotations (strokes, boxes, correct class)
   // from the AnnotateScreen to the backend for active learning.

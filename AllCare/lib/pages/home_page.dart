@@ -156,10 +156,14 @@ class _HomePageState extends State<HomePage> {
           recordStatus.toLowerCase() == 'pending'
               ? 'uncertain'
               : recordStatus.toLowerCase();
+      final isLabeledFilter = _selectedCaseStatus.toLowerCase() == 'labeled';
       final statusMatch =
-          _selectedCaseStatus.toLowerCase() == 'all'
+          isLabeledFilter
               ? true
-              : normalizedStatus == _selectedCaseStatus.toLowerCase();
+              : _selectedCaseStatus.toLowerCase() == 'all'
+                  ? true
+                  : normalizedStatus == _selectedCaseStatus.toLowerCase();
+      final labeledMatch = isLabeledFilter ? record.isLabeled : true;
 
       // Filter by search query (case ID, prediction, or location)
       final caseId = record.caseId;
@@ -189,7 +193,7 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
-      return statusMatch && searchMatch && dateMatch;
+      return statusMatch && labeledMatch && searchMatch && dateMatch;
     }).toList();
   }
 
@@ -716,6 +720,8 @@ class _HomePageState extends State<HomePage> {
                                                     'Confirmed',
                                                     'Uncertain',
                                                     'Rejected',
+                                                    if (_shouldShowLabeling)
+                                                      'Labeled',
                                                   ].map((String value) {
                                                     final isSelected =
                                                         _selectedCaseStatus ==

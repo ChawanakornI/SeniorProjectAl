@@ -950,6 +950,30 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
+  Future<bool> _confirmAction(String title, String message) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('ตกลง'),
+            ),
+          ],
+        );
+      },
+    );
+    return result == true;
+  }
+
   /// Bottom action buttons
   Widget _buildBottomButtons(bool isDark) {
     return Container(
@@ -966,6 +990,11 @@ class _ResultScreenState extends State<ResultScreen> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: () async {
+                    final ok = await _confirmAction(
+                      'ยืนยันการ Reject',
+                      'ต้องการ Reject เคสนี้จริงๆ ไหม?',
+                    );
+                    if (!ok) return;
                     try {
                       await context.read<CaseService>().rejectCase(
                         caseId: widget.caseId,
@@ -989,48 +1018,19 @@ class _ResultScreenState extends State<ResultScreen> {
                     
                     if (!mounted) return;
 
-                    // Navigate to annotation screen and handle result
-                    final isGp =
-                        context.read<AppState>().userRole.toLowerCase() == 'gp';
-                    if (isGp && _isRejected) {
-                      // _showActionSnack("GP cannot annotate rejected cases.");
-                      Navigator.of(context).pop('rejected');
-                      return;
+                    try {
+                      await context.read<CaseService>().isActiveLearningCandidate(
+                        caseId: widget.caseId,
+                      );
+                    } catch (e) {
+                      if (mounted) {
+                        _showActionSnack("AL check failed: $e");
+                      }
                     }
 
-                    final annotationResult = await Navigator.of(context).push<Map<String, dynamic>>(
-                      MaterialPageRoute(
-                        builder: (_) => AnnotateScreen(
-                          caseId: widget.caseId,
-                          imagePaths: widget.imagePaths,
-                          initialIndex: _currentImageIndex,
-                        ),
-                      ),
-                    );
-
-                    if (annotationResult != null && mounted) {
-                      try {
-                        await context.read<CaseService>().saveAnnotations(
-                          caseId: annotationResult['caseId'] as String,
-                          imageIndex: annotationResult['imageIndex'] as int,
-                          correctLabel: annotationResult['class'] as String,
-                          strokes: (annotationResult['strokes'] as List?)?.cast<Map<String, dynamic>>() ?? [],
-                          boxes: (annotationResult['boxes'] as List?)?.cast<Map<String, dynamic>>() ?? [],
-                        );
-
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Annotations saved successfully')),
-                          );
-                          Navigator.of(context).pop('annotated');
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed to save: $e')),
-                          );
-                        }
-                      }
+                    if (mounted) {
+                      _showActionSnack('Rejected and AL margin calculated');
+                      Navigator.of(context).popUntil((route) => route.isFirst);
                     }
                   },
                   style: OutlinedButton.styleFrom(
@@ -1075,6 +1075,11 @@ class _ResultScreenState extends State<ResultScreen> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () async {
+                    final ok = await _confirmAction(
+                      'ยืนยันการ Confirm',
+                      'ต้องการ Confirm เคสนี้จริงๆ ไหม?',
+                    );
+                    if (!ok) return;
                     try {
                       await context.read<CaseService>().logCase(
                         caseId: widget.caseId,
