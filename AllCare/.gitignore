@@ -1,0 +1,119 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+*.swo
+*.tmp
+*.bak
+*.orig
+*~
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+.cache/
+.cursor/
+.claude/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+coverage/
+lib/generated_plugin_registrant.dart
+**/flutter_export_environment.sh
+/android/.gradle/
+/android/local.properties
+/ios/Pods/
+/macos/Pods/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Coverage reports
+lcov.info
+.coverage
+coverage.xml
+
+# Python tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Mobile build artifacts
+*.apk
+*.aab
+*.ipa
+*.dSYM
+*.xcarchive
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+android/app/build/
+android/.cxx/
+.gradle/
+
+# Android signing / Firebase config
+android/key.properties
+android/app/google-services.json
+android/app/*.jks
+android/app/*.keystore
+*.jks
+*.keystore
+
+# iOS Firebase config
+ios/Runner/GoogleService-Info.plist
+
+# Python / backend
+.venv/
+env/
+venv/
+__pycache__/
+backserver/storage/
+backserver/storage/metadata.jsonl
+assets/models/
+
+# Environment / secrets
+.env
+.env.*
+
+2026-01-15-local-command-caveatcaveat-the-messages-below-w.txt
+2026-01-16-on-containerization.txt
+
+PROTOCOL_ARCHITECTURE.md
+# FRONTEND_CODE_REVIEW.md
