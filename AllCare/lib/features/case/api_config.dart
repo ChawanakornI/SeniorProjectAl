@@ -59,6 +59,7 @@ class ApiConfig {
   static Uri get activeLearningCandidatesUri =>
       Uri.parse('$baseUrl/active-learning/candidates');
 
+
   // (bridge-frontend-backend): Add annotations endpoint
   // This endpoint saves manual annotations (strokes, boxes, correct class)
   // from the AnnotateScreen to the backend for active learning.
@@ -151,4 +152,5 @@ class ApiConfig {
     log('[ApiConfig] checkImageUri: $checkImageUri', name: 'ApiConfig');
     log('[ApiConfig] apiKey set: ${apiKey != null}', name: 'ApiConfig');
   }
+
 }

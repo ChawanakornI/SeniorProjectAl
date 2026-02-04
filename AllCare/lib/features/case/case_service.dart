@@ -414,6 +414,7 @@ class CaseService {
     int topK = 5,
     String? entryType,
     String? status,
+    bool includeLabeled = false,
   }) async {
     log('Checking AL candidates for case $caseId', name: 'CaseService');
 
@@ -430,6 +431,7 @@ class CaseService {
         if (entryType != null && entryType.trim().isNotEmpty)
           'entry_type': entryType.trim(),
         if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+        'include_labeled': includeLabeled,
       });
 
       final response = await http
@@ -473,6 +475,7 @@ class CaseService {
     int topK = 50,
     String? entryType,
     String? status,
+    bool includeLabeled = false,
   }) async {
     log('Fetching AL candidates (topK=$topK)', name: 'CaseService');
 
@@ -489,6 +492,7 @@ class CaseService {
         if (entryType != null && entryType.trim().isNotEmpty)
           'entry_type': entryType.trim(),
         if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+        'include_labeled': includeLabeled,
       });
 
       final response = await http
