@@ -78,7 +78,7 @@ flutter:
     - assets/images/
     - assets/Icons/
 
-    - assets/model/
+    - assets/models/
     - assets/images/LogoVector.svg
     - assets/images/AllcareTextVector.svg
     - assets/images/sign_in_button.svg

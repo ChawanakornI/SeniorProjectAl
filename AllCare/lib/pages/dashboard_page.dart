@@ -1335,6 +1335,8 @@ class _DashboardPageState extends State<DashboardPage>
                                   createdAt: caseRecord.createdAt,
                                   updatedAt: caseRecord.updatedAt,
                                   isPrePrediction: false,
+                                  predictIndex:
+                                      caseRecord.selectedPredictionIndex ?? 0,
                                 ),
                           ),
                         );

@@ -928,7 +928,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                         _showConfirmDialog(context); // Will lead to AddPhoto
                     } else {
                         // Case ID not loaded or saving in progress
-                         _showGlassSnackBar('Please wait for Case ID generation...', isError: false);
+                        _showGlassSnackBar('Please wait for Case ID generation...', isError: false);
                     }
                 },
                 style: ElevatedButton.styleFrom(
@@ -1055,7 +1055,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                         }
 
                                         // Open Add Photo Dialog with Blur Stack
-                                        final List<String>? result = await showDialog<List<String>>(
+                                        // AddPhotoDialog returns Map with 'images' and 'predictIndex'
+                                        final Map<String, dynamic>? dialogResult = await showDialog<Map<String, dynamic>>(
                                             context: context,
                                             barrierDismissible: false,
                                             barrierColor:
@@ -1078,6 +1079,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                             },
                                         );
 
+                                        // Extract images list from dialog result
+                                        final List<String>? result = dialogResult?['images']?.cast<String>();
                                         if (result == null || result.isEmpty) return;
                                         if (!context.mounted) return;
 
@@ -1094,34 +1097,42 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                               selectedSymptoms.add(_customSymptomsController.text.trim());
                                             }
                                         // Navigate to Photo Preview
-                                        final bool? shouldSave = await Navigator.of(context).push<bool>(
+                                        // PhotoPreviewScreen returns a Map with 'confirmed' and 'predictionIndex'
+                                        final dynamic resultData = await Navigator.of(context).push(
                                             MaterialPageRoute(
-                                            builder: (_) => PhotoPreviewScreen(
-                                                imagePath: result.first,
-                                                imagePaths: result,
-                                                caseId: caseId,
-                                                isMultiImage: result.length > 1,
-                                                imageCount: result.length,
-                                            ),
+                                              builder: (_) => PhotoPreviewScreen(
+                                                  imagePath: result.first,
+                                                  imagePaths: result,
+                                                  caseId: caseId,
+                                                  isMultiImage: result.length > 1,
+                                                  imageCount: result.length,
+                                              ),
                                             ),
                                         );
 
-                                        if (shouldSave == true && context.mounted) {
+                                        // Check if user confirmed and extract predictIndex
+                                        if (resultData != null &&
+                                            resultData is Map &&
+                                            resultData['confirmed'] == true &&
+                                            context.mounted) {
+                                            final int predictIndex = resultData['predictionIndex'] ?? 0;
+
                                             await Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                            builder: (_) => CaseSummaryScreen(
-                                                caseId: caseId,
-                                                gender: _selectedGender,
-                                                age: _selectedAge,
-                                                location: _selectedSpecificLocation,
-                                                symptoms: selectedSymptoms,
-                                                imagePaths: result,
-                                                imagePath: result.first,
-                                                createdAt: createdAt,
-                                                updatedAt: updatedAt,
-                                                isPrePrediction: true,
+                                              MaterialPageRoute(
+                                                builder: (_) => CaseSummaryScreen(
+                                                    caseId: caseId,
+                                                    gender: _selectedGender,
+                                                    age: _selectedAge,
+                                                    location: _selectedSpecificLocation,
+                                                    symptoms: selectedSymptoms,
+                                                    imagePaths: result,
+                                                    imagePath: result.first,
+                                                    createdAt: createdAt,
+                                                    updatedAt: updatedAt,
+                                                    isPrePrediction: true,
+                                                    predictIndex: predictIndex,
                                                 ),
-                                            ),
+                                              ),
                                             );
                                         }
                                     },
