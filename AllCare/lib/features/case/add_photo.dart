@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 import 'api_config.dart';
 import 'camera_screen.dart';
-
+//asdas
 class AddPhotoDialog extends StatefulWidget {
   const AddPhotoDialog({
     super.key,
@@ -26,7 +26,8 @@ class AddPhotoDialog extends StatefulWidget {
 
 class _AddPhotoDialogState extends State<AddPhotoDialog> {
   final List<String> _selectedImages = [];
-  final int _maxImages = 1;
+  final int _maxImages = 8;
+  int _predictIndex = 0;
   late final List<String> _initialImages;
 
   @override
@@ -260,23 +261,25 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                       builder: (context) => CameraScreen(caseId: widget.caseId),
                     ),
                   );
-                  // if (result != null) {
-                  //   if (result is List<String>) {
-                  //     // Handle multiple images from camera
-                  //     for (final path in result) {
-                  //       await _validateAndAddImage(path);
-                  //       if (_selectedImages.length >= _maxImages) break;
-                  //     }
-                  //   } else if (result is String) {
-                  //     // Handle single image (backward compatibility)
-                  //     await _validateAndAddImage(result);
-                  //   }
+                  if (result != null) {
+                    if (result is List<String>) {
+                      // Handle multiple images from camera
+                      for (final path in result) {
+                        await _validateAndAddImage(path);
+                        if (_selectedImages.length >= _maxImages) break;
+                      }
+                    } else if (result is String) {
+                      // Handle single image (backward compatibility)
+                      await _validateAndAddImage(result);
+                    }
+                  }
+
+                  //// this is for single image
+                  // if (result != null){
+                  //   if (result is String){
+                  //   await _validateAndAddImage(result);
                   // }
-                  if (result != null){
-                    if (result is String){
-                    await _validateAndAddImage(result);
-                  }
-                  }
+                  // }
                 },
               ),
               ListTile(
@@ -287,23 +290,16 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                 onTap: () async {
                   Navigator.of(ctx).pop();
                   final ImagePicker picker = ImagePicker();
-                  // final List<XFile> images = await picker.pickImage(
-                  //   limit: _maxImages - _selectedImages.length,
-                  //   imageQuality: 90,
-                  // );
-                  // if (images.isNotEmpty) {
-                  //   // Process multiple images with blur check
-                  //   for (final image in images) {
-                  //     await _validateAndAddImage(image.path);
-                  //     // Stop if we've reached the limit
-                  //     if (_selectedImages.length >= _maxImages) break;
-                  //   }
-                  // }
+                  final List<XFile> images = await picker.pickMultiImage(
+                    limit: _maxImages - _selectedImages.length,
+                    imageQuality: 90,
+                  );
 
-                  // Just one image
-                  final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-                  if (image != null){
+                  // Process multiple images with blur check
+                  for (final image in images) {
                     await _validateAndAddImage(image.path);
+                    // Stop if we've reached the limit
+                    if (_selectedImages.length >= _maxImages) break;
                   }
                 },
               ),
@@ -347,7 +343,10 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
       isConfirmAction: true,
       onConfirm: () {
         // ส่ง List รูปภาพกลับไปหน้าหลัก
-        Navigator.of(context).pop(_selectedImages);
+        Navigator.of(context).pop({
+          'images': _selectedImages,
+          'predictIndex': _predictIndex,
+      });
       },
     );
   }
@@ -499,7 +498,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
       backgroundColor: Colors.transparent, 
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        constraints: const BoxConstraints(maxHeight: 600),
+        constraints: const BoxConstraints(maxHeight: 500),
         decoration: BoxDecoration(
           color:
               isDark
@@ -572,7 +571,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                   // ---------- Image Area ----------
                   Expanded(
                     child:
-                        _selectedImages.isEmpty ? _buildEmptyState() : _buildSingleImage(isDark),
+                        _selectedImages.isEmpty ? _buildEmptyState() : _buildImageGrid(isDark),
                         // _buildImageGrid(isDark),
                   ),
 
@@ -630,14 +629,25 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
 
             // ---------- Close button ----------
             Positioned(
-              top: 8,
-              right: 8,
-              child: IconButton(
-                icon: Icon(
-                  Icons.close,
-                  color: isDark ? Colors.white70 : Colors.black54,
+              top: 12,
+              right: 12,
+              child: GestureDetector(
+                onTap: _handleCancel,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.black.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.close,
+                    size: 20,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  ),
                 ),
-                onPressed: _handleCancel,
               ),
             ),
           ],
@@ -693,98 +703,98 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
 }
 
 
-  // // Widget 2: แสดงตอนมีรูปแล้ว (Grid)
-  // Widget _buildImageGrid(bool isDark) {
-  //   return GridView.builder(
-  //     itemCount:
-  //         _selectedImages.length +
-  //         (_selectedImages.length < _maxImages ? 1 : 0),
-  //     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-  //       crossAxisCount: 2,
-  //       crossAxisSpacing: 12,
-  //       mainAxisSpacing: 12,
-  //       childAspectRatio: 1,
-  //     ),
-  //     itemBuilder: (context, index) {
-  //       if (index == _selectedImages.length) {
-  //         return GestureDetector(
-  //           onTap: () => _showImageSourceActionSheet(context),
-  //           child: Container(
-  //             decoration: BoxDecoration(
-  //               color: isDark? Color(0xFF282828)
-  //               :Colors.grey.shade50,
-  //               borderRadius: BorderRadius.circular(8),
-  //               border: Border.all(color: Colors.grey.shade300),
-  //             ),
-  //             child: Icon(Icons.add, size: 30, color: Colors.grey.shade600),
-  //           ),
-  //         );
-  //       }
+  // Widget 2: แสดงตอนมีรูปแล้ว (Grid)
+  Widget _buildImageGrid(bool isDark) {
+    return GridView.builder(
+      itemCount:
+          _selectedImages.length +
+          (_selectedImages.length < _maxImages ? 1 : 0),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1,
+      ),
+      itemBuilder: (context, index) {
+        if (index == _selectedImages.length) {
+          return GestureDetector(
+            onTap: () => _showImageSourceActionSheet(context),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark? Color(0xFF282828)
+                :Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Icon(Icons.add, size: 30, color: Colors.grey.shade600),
+            ),
+          );
+        }
 
-  //       final imagePath = _selectedImages[index];
-  //       return Stack(
-  //         clipBehavior: Clip.none,
-  //         children: [
-  //           ClipRRect(
-  //             borderRadius: BorderRadius.circular(8),
-  //             child: SizedBox.expand(
-  //               child: _buildThumbnail(imagePath, isDark),
-  //             ),
-  //           ),
-  //           Positioned(
-  //             top: -8,
-  //             right: -8,
-  //             child: GestureDetector(
-  //               onTap: () => _removeImage(index),
-  //               child: Container(
-  //                 padding: const EdgeInsets.all(7),
-  //                 decoration: const BoxDecoration(
-  //                   color: Colors.red,
-  //                   shape: BoxShape.circle,
-  //                 ),
-  //                 child: const Icon(Icons.close, size: 12, color: Colors.white),
-  //               ),
-  //             ),
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  // }
-  Widget _buildSingleImage(bool isDark) {
-    final imagePath = _selectedImages.first;
-
-    return Center(
-      child: SizedBox(
-        width: 200,
-        height: 200,
-        child: Stack(
+        final imagePath = _selectedImages[index];
+        return Stack(
           clipBehavior: Clip.none,
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(8),
               child: SizedBox.expand(
                 child: _buildThumbnail(imagePath, isDark),
               ),
             ),
             Positioned(
-              top: -10,
-              right: -10,
+              top: -8,
+              right: -8,
               child: GestureDetector(
-                onTap: () => _removeImage(0),
+                onTap: () => _removeImage(index),
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(7),
                   decoration: const BoxDecoration(
                     color: Colors.red,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.close, size: 15, color: Colors.white),
+                  child: const Icon(Icons.close, size: 12, color: Colors.white),
                 ),
               ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
+  // Widget _buildSingleImage(bool isDark) {
+  //   final imagePath = _selectedImages.first;
+
+  //   return Center(
+  //     child: SizedBox(
+  //       width: 200,
+  //       height: 200,
+  //       child: Stack(
+  //         clipBehavior: Clip.none,
+  //         children: [
+  //           ClipRRect(
+  //             borderRadius: BorderRadius.circular(12),
+  //             child: SizedBox.expand(
+  //               child: _buildThumbnail(imagePath, isDark),
+  //             ),
+  //           ),
+  //           Positioned(
+  //             top: -10,
+  //             right: -10,
+  //             child: GestureDetector(
+  //               onTap: () => _removeImage(0),
+  //               child: Container(
+  //                 padding: const EdgeInsets.all(8),
+  //                 decoration: const BoxDecoration(
+  //                   color: Colors.red,
+  //                   shape: BoxShape.circle,
+  //                 ),
+  //                 child: const Icon(Icons.close, size: 15, color: Colors.white),
+  //               ),
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 }

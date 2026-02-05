@@ -56,6 +56,7 @@ class CaseLog(BaseModel):
     image_paths: List[str] = Field(default_factory=list)  # Paths to captured images
     created_at: Optional[str] = None  # ISO format timestamp
     isLabeled: Optional[bool] = False # this is for checking whether image have been labeled or not [ labeled mean annotated or changed by user in annotate screen]
+    selected_prediction_index: Optional[int] = None  # Index of image selected for prediction
 
 
 class CaseIdRelease(BaseModel):
@@ -77,6 +78,7 @@ class CaseUpdate(BaseModel):
     symptoms: Optional[List[str]] = None
     image_paths: Optional[List[str]] = None
     created_at: Optional[str] = None
+    selected_prediction_index: Optional[int] = None  # Index of image selected for prediction
 
 
 class RejectCase(BaseModel):
@@ -94,6 +96,7 @@ class RejectCase(BaseModel):
     symptoms: List[str] = Field(default_factory=list)
     image_paths: List[str] = Field(default_factory=list)
     created_at: Optional[str] = None
+    selected_prediction_index: Optional[int] = None  # Index of image selected for prediction
 
 
 class LabelSubmission(BaseModel):

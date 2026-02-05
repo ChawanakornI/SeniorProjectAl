@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Admin script to manage users in users.json"""
+"to run this script, run python admin_user_manager.py"
+
 
 import json
 from pathlib import Path
@@ -154,7 +156,6 @@ def add_user():
     if not last_name:
         print_error("Last name cannot be empty!")
         return
-
     # Role selection
     print(f"\n{Colors.CYAN}Role{Colors.RESET}")
     print(f"  {Colors.BRIGHT_GREEN}1.{Colors.RESET} GP (General Practitioner)")

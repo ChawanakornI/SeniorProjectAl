@@ -22,6 +22,7 @@ class CaseRecord {
   final String? updatedAt;
   final bool isLabeled;
   final String? correctLabel;
+  final int? selectedPredictionIndex; // Index of image selected for prediction
 
   CaseRecord({
     required this.caseId,
@@ -38,6 +39,7 @@ class CaseRecord {
     this.updatedAt,
     this.isLabeled = false,
     this.correctLabel,
+    this.selectedPredictionIndex,
   });
 
   factory CaseRecord.fromJson(Map<String, dynamic> json) {
@@ -84,6 +86,7 @@ class CaseRecord {
       updatedAt: json['updated_at'] as String?,
       isLabeled: isLabeled,
       correctLabel: correctLabel,
+      selectedPredictionIndex: json['selected_prediction_index'] as int?,
     );
   }
 
@@ -251,6 +254,7 @@ class CaseService {
     List<String> imagePaths = const [], // Image paths to store
     Map<String, String>? imageDecisions,
     String? notes,
+    int? selectedPredictionIndex, // Index of image selected for prediction
   }) async {
     log('Logging case $caseId with status $status', name: 'CaseService');
 
@@ -276,6 +280,8 @@ class CaseService {
           'image_decisions': imageDecisions,
         if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
         'created_at': DateTime.now().toIso8601String(),
+        if (selectedPredictionIndex != null)
+          'selected_prediction_index': selectedPredictionIndex,
       });
 
       final response = await http
@@ -358,6 +364,7 @@ class CaseService {
     List<String> symptoms = const [],
     List<String> imagePaths = const [],
     Map<String, String>? imageDecisions,
+    int? selectedPredictionIndex, // Index of image selected for prediction
   }) async {
     log('Rejecting case $caseId', name: 'CaseService');
 
@@ -383,6 +390,8 @@ class CaseService {
         if (imageDecisions != null && imageDecisions.isNotEmpty)
           'image_decisions': imageDecisions,
         'created_at': DateTime.now().toIso8601String(),
+        if (selectedPredictionIndex != null)
+          'selected_prediction_index': selectedPredictionIndex,
       });
 
       final response = await http

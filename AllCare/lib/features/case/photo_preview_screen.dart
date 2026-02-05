@@ -169,7 +169,11 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     // Return true to indicate save confirmed
-                    Navigator.of(context).pop(true);
+                    Navigator.of(context).pop(
+                      {
+                      'confirmed':true,
+                      'predictionIndex': _currentPage,
+                      });
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF007AFF),
@@ -295,6 +299,30 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
             ),
           ),
         ),
+        Positioned(
+          bottom: 16,
+          left: 0,
+          right: 0,
+            child: Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'selected for prediction',
+                      style: TextStyle(color: Color(0xFFF0EAD6), fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                  ),
+              ),
+            ),
+        )
       ],
     );
   }

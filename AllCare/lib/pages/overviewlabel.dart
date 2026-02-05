@@ -423,6 +423,7 @@ class _LabelPageState extends State<LabelPage> {
       updatedAt: raw['updated_at']?.toString(),
       isLabeled: raw['correct_label'] != null,
       correctLabel: raw['correct_label']?.toString(),
+      selectedPredictionIndex: raw['selected_prediction_index'] as int?,
     );
 
     return _AlCaseView(

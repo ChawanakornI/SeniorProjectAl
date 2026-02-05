@@ -87,61 +87,44 @@ class PredictionService {
         .toList();
   }
 
-  /// Predict multiple images and return aggregated results.
-  /// 
-  /// Calls the backend for each image and aggregates the predictions
-  /// by averaging confidence scores for each class.
+  /// Predict a selected image from a list of image paths.
   Future<Map<String, dynamic>> predictMultiple(
     List<String> imagePaths, {
     String? caseId,
+    int? selectedIndex,
     void Function(int current, int total)? onProgress,
   }) async {
     if (imagePaths.isEmpty) {
       throw Exception('No images provided for prediction');
     }
 
-    log('Starting multi-image prediction for ${imagePaths.length} images', name: 'PredictionService');
-    onProgress?.call(0, imagePaths.length);
+    final index = (selectedIndex != null &&
+            selectedIndex >= 0 &&
+            selectedIndex < imagePaths.length)
+        ? selectedIndex
+        : 0;
 
-    // Get predictions for all images
-    final List<List<Map<String, dynamic>>> allPredictions = [];
-    final List<Map<String, dynamic>> fullResults = [];
-    
-    for (int i = 0; i < imagePaths.length; i++) {
-      final imagePath = imagePaths[i];
-      try {
-        final result = await predictSingle(imagePath, caseId: caseId);
-        fullResults.add(result);
-        
-        final predictions = result['predictions'] as List<dynamic>? ?? [];
-        allPredictions.add(predictions.map((p) => p as Map<String, dynamic>).toList());
-      } catch (e) {
-        log('Failed to predict for $imagePath: $e', name: 'PredictionService');
-        // Keep positional alignment for UI even when prediction fails
-        fullResults.add({'predictions': []});
-      } finally {
-        onProgress?.call(i + 1, imagePaths.length);
-      }
-    }
+    final selectedPath = imagePaths[index];
+    log(
+      'Predicting selected image (index $index) from ${imagePaths.length} images',
+      name: 'PredictionService',
+    );
+    onProgress?.call(0, 1);
 
-    if (allPredictions.isEmpty) {
-      throw Exception('All predictions failed');
-    }
+    final result = await predictSingle(selectedPath, caseId: caseId);
 
-    // Aggregate predictions by averaging confidence scores for each class
-    final aggregatedResults = _aggregatePredictions(allPredictions);
-
-    log('Multi-image prediction completed. Top aggregated result: ${aggregatedResults['predictions'].first['label']}', 
-        name: 'PredictionService');
-
+    onProgress?.call(1, 1);
     return {
-      ...aggregatedResults,
-      'individual_results': fullResults,
+      ...result,
+      'selected_prediction_index': index,
     };
   }
 
+  /*
   /// Aggregate predictions from multiple images by averaging confidence scores
-  Map<String, dynamic> _aggregatePredictions(List<List<Map<String, dynamic>>> allPredictions) {
+  Map<String, dynamic> _aggregatePredictions(
+    List<List<Map<String, dynamic>>> allPredictions,
+  ) {
     // Initialize a map to accumulate confidence scores for each class
     final Map<String, double> classConfidenceSum = {};
     final Map<String, int> classCount = {};
@@ -163,7 +146,7 @@ class PredictionService {
     classConfidenceSum.forEach((label, totalConfidence) {
       final count = classCount[label]!;
       final averageConfidence = totalConfidence / count;
-      
+
       aggregatedPredictions.add({
         'label': label,
         'confidence': averageConfidence,
@@ -171,14 +154,14 @@ class PredictionService {
     });
 
     // Sort by confidence descending
-    aggregatedPredictions.sort((a, b) => 
+    aggregatedPredictions.sort((a, b) =>
       (b['confidence'] as double).compareTo(a['confidence'] as double)
     );
 
     // Normalize so that the sum of all confidences equals 1
-    final total = aggregatedPredictions.fold(0.0, 
+    final total = aggregatedPredictions.fold(0.0,
       (sum, pred) => sum + (pred['confidence'] as double));
-    
+
     if (total > 0) {
       for (final pred in aggregatedPredictions) {
         pred['confidence'] = (pred['confidence'] as double) / total;
@@ -191,6 +174,7 @@ class PredictionService {
       'aggregation_method': 'average_confidence'
     };
   }
+  */
 
   /// Check if the backend server is reachable
   Future<bool> checkHealth() async {

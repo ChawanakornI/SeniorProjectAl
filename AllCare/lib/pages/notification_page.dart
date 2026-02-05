@@ -446,6 +446,10 @@ class _NotificationPageState extends State<NotificationPage> {
                                               createdAt: caseItem.createdAt,
                                               updatedAt: caseItem.updatedAt,
                                               isPrePrediction: false,
+                                              predictIndex:
+                                                  caseItem
+                                                      .selectedPredictionIndex ??
+                                                  0,
                                             ),
                                       ),
                                     );
