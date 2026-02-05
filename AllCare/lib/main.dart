@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'app_state.dart';
 import 'features/case/case_service.dart';
 import 'features/case/prediction_service.dart';
+import 'features/case/api_config.dart';
 import 'pages/home_page.dart';
 import 'pages/gp_home_page.dart';
 import 'routes.dart';
@@ -21,6 +22,7 @@ Future<void> main() async {
   // Load global persisted settings (theme, language, etc.)
   // User-specific data (profile, names) is loaded after login
   await appStateInstance.loadPersistedData();
+  await ApiConfig.loadFromAssets();
 
   // Camera plugin doesn't support macOS, so handle gracefully
   if (Platform.isMacOS) {

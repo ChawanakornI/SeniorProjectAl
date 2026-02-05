@@ -7,6 +7,7 @@ from the current production model or base checkpoints.
 
 import os
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 
@@ -271,6 +272,17 @@ def collect_legacy_labeled_cases() -> List[Tuple[str, int]]:
     return results
 
 
+def get_available_training_sample_count() -> int:
+    """
+    Count how many samples are available for retraining.
+    Prefers labels_pool data; falls back to legacy metadata if empty.
+    """
+    samples = collect_labeled_samples()
+    if not samples:
+        samples = collect_legacy_labeled_cases()
+    return len(samples)
+
+
 # =============================================================================
 # Base Model Loading (Transfer Learning)
 # =============================================================================
@@ -354,6 +366,12 @@ def retrain_model(
     if training_cfg is None:
         training_cfg = tc.load_config()
 
+    # Allow config.py to override training defaults (no hardcode)
+    if config.RETRAIN_DEFAULT_EPOCHS > 0:
+        training_cfg["epochs"] = config.RETRAIN_DEFAULT_EPOCHS
+    if config.RETRAIN_DEFAULT_BATCH_SIZE > 0:
+        training_cfg["batch_size"] = config.RETRAIN_DEFAULT_BATCH_SIZE
+
     epochs = training_cfg.get("epochs", 10)
     batch_size = training_cfg.get("batch_size", 16)
     learning_rate = training_cfg.get("learning_rate", 1e-4)
@@ -374,11 +392,29 @@ def retrain_model(
             "samples_used": len(samples)
         }
 
-    # Log training start
+    # Determine output directory early so registry can track this training run
+    version_dir = os.path.join(config.AL_CANDIDATES_DIR, version_id)
+    if output_path is None:
+        output_path = os.path.join(version_dir, "pending.pt")
+
+    # Register model as training and log training start
+    model_registry.register_model(
+        version_id=version_id,
+        base_model=None,
+        training_config=training_cfg,
+        path=output_path,
+        status=model_registry.ModelStatus.TRAINING
+    )
     event_log.log_training_started(version_id, training_cfg)
 
     # Set up device
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Select device based on config preference
+    if config.RETRAIN_DEVICE == "cuda":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    elif config.RETRAIN_DEVICE == "cpu":
+        device = "cpu"
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
     try:
         # Load base model for transfer learning
@@ -444,14 +480,15 @@ def retrain_model(
             training_log.append(epoch_log)
             print(f"Epoch {epoch + 1}: loss={train_loss:.4f} train_acc={train_acc:.2%} val_acc={val_acc:.2%}")
 
-        # Determine output path
-        if output_path is None:
-            version_dir = os.path.join(config.AL_CANDIDATES_DIR, version_id)
-            os.makedirs(version_dir, exist_ok=True)
-            output_path = os.path.join(version_dir, "model.pt")
+        # Determine output file name based on date and model architecture
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        model_name = arch or "model"
+        output_path = os.path.join(version_dir, f"[{date_str}] - {model_name}.pt")
+
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # Save model with architecture metadata
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         torch.save({
             "model_state_dict": model.state_dict(),
             "architecture": arch
@@ -470,21 +507,28 @@ def retrain_model(
             "epochs_completed": epochs
         }
 
-        # Register model in registry (include architecture)
-        model_entry = model_registry.register_model(
-            version_id=version_id,
-            base_model=base_model_id,
-            training_config=training_cfg,
-            path=output_path,
-            status=model_registry.ModelStatus.EVALUATING
-        )
-        model_registry.update_model_metrics(version_id, metrics)
-
-        # Update registry with architecture info
+        # Update registry with final details and metrics
         registry = model_registry._load_registry()
         if version_id in registry["models"]:
+            registry["models"][version_id]["base_model"] = base_model_id
+            registry["models"][version_id]["training_config"] = training_cfg
+            registry["models"][version_id]["path"] = output_path
             registry["models"][version_id]["architecture"] = arch
+            registry["models"][version_id]["metrics"] = metrics
+            registry["models"][version_id]["status"] = model_registry.ModelStatus.EVALUATING
             model_registry._save_registry(registry)
+        else:
+            model_registry.register_model(
+                version_id=version_id,
+                base_model=base_model_id,
+                training_config=training_cfg,
+                path=output_path,
+                status=model_registry.ModelStatus.EVALUATING
+            )
+            model_registry.update_model_metrics(version_id, metrics)
+
+        # Ensure status is not left as training
+        model_registry.update_model_status(version_id, model_registry.ModelStatus.EVALUATING)
 
         # Mark labels as used
         case_ids = [item["case_id"] for item in labels_pool.get_labels_for_training()]

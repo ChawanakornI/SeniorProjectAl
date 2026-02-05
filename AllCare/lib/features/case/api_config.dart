@@ -1,11 +1,13 @@
 /// Usage:
-///   flutter run --dart-define=BACKSERVER_BASE=http://your ip addr:8000
-/// 
+///   Configure assets/app_config.json for BACKSERVER_BASE and API_KEY.
+///
 /// For Android emulator, use: http://10.0.2.2:8000
 /// For real device on same network, use your computer's local IP.
 library;
 
+import 'dart:convert';
 import 'dart:developer';
+import 'package:flutter/services.dart';
 
 class ApiConfig {
   ApiConfig._();
@@ -13,9 +15,33 @@ class ApiConfig {
   /// Raw value from environment (may have typos)
   static const String _rawBase =
       String.fromEnvironment('BACKSERVER_BASE', defaultValue: 'http://10.0.2.2:8000');
+  static String? _assetBase;
+  static String? _assetApiKey;
+  static bool _assetLoaded = false;
+
+  /// Load configuration from assets/app_config.json if present.
+  static Future<void> loadFromAssets() async {
+    if (_assetLoaded) {
+      return;
+    }
+    _assetLoaded = true;
+    try {
+      final raw = await rootBundle.loadString('assets/app_config.json');
+      final data = jsonDecode(raw);
+      if (data is Map<String, dynamic>) {
+        final base = (data['BACKSERVER_BASE'] as String?)?.trim();
+        final key = (data['API_KEY'] as String?)?.trim();
+        _assetBase = (base != null && base.isNotEmpty) ? base : null;
+        _assetApiKey = (key != null && key.isNotEmpty) ? key : null;
+      }
+    } catch (_) {
+      // Ignore missing or invalid config file
+    }
+  }
   /// Sanitized base URL - always starts with http://
   static String get baseUrl {
-    String base = _rawBase.trim();
+    final raw = (_assetBase ?? _rawBase).trim();
+    String base = raw;
 
     // Fix common typos: htp://, ht://, https:// -> http://
     if (base.startsWith('htp://')) {
@@ -82,6 +108,13 @@ class ApiConfig {
   /// Get production model info
   static Uri get adminProductionModelUri => Uri.parse('$baseUrl/admin/models/production');
 
+  /// Get active inference model
+  static Uri get adminActiveInferenceUri => Uri.parse('$baseUrl/admin/models/active');
+
+  /// Activate model for inference
+  static Uri adminActivateModelUri(String versionId) =>
+      Uri.parse('$baseUrl/admin/models/$versionId/activate');
+
   /// Promote a specific model
   static Uri adminPromoteModelUri(String versionId) =>
       Uri.parse('$baseUrl/admin/models/$versionId/promote');
@@ -127,8 +160,9 @@ class ApiConfig {
     if (json) {
       headers['Content-Type'] = 'application/json';
     }
-    if (apiKey != null) {
-      headers['X-API-Key'] = apiKey!;
+    final resolvedKey = _assetApiKey ?? apiKey;
+    if (resolvedKey != null) {
+      headers['X-API-Key'] = resolvedKey;
     }
     // Prefer Bearer token if available
     if (token != null && token.trim().isNotEmpty) {
@@ -148,9 +182,12 @@ class ApiConfig {
   /// Debug: print the resolved config
   static void printConfig() {
     log('[ApiConfig] Raw BACKSERVER_BASE: $_rawBase', name: 'ApiConfig');
+    if (_assetBase != null) {
+      log('[ApiConfig] Asset BACKSERVER_BASE: $_assetBase', name: 'ApiConfig');
+    }
     log('[ApiConfig] Resolved baseUrl: $baseUrl', name: 'ApiConfig');
     log('[ApiConfig] checkImageUri: $checkImageUri', name: 'ApiConfig');
-    log('[ApiConfig] apiKey set: ${apiKey != null}', name: 'ApiConfig');
+    log('[ApiConfig] apiKey set: ${_assetApiKey != null || apiKey != null}', name: 'ApiConfig');
   }
 
 }

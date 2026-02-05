@@ -29,6 +29,7 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> _modelHistory = [];
   bool _isLoadingHistory = false;
   String? _currentProduction;
+  String? _activeInference;
 
   // Training Events state
   List<Map<String, dynamic>> _events = [];
@@ -199,6 +200,8 @@ class _AdminPageState extends State<AdminPage> {
     final metrics = model['metrics'] as Map<String, dynamic>? ?? {};
     final accuracy = metrics['val_accuracy'];
     final isProduction = status == 'production';
+    final isActiveInference = _activeInference == versionId;
+    final canActivate = status == 'production' || status == 'evaluating';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -222,6 +225,10 @@ class _AdminPageState extends State<AdminPage> {
                   style: GoogleFonts.jetBrainsMono(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
+              if (isActiveInference) ...[
+                const SizedBox(width: 8),
+                _buildStatusBadge('active'),
+              ],
               _buildStatusBadge(status),
             ],
           ),
@@ -250,6 +257,16 @@ class _AdminPageState extends State<AdminPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (canActivate)
+                  TextButton.icon(
+                    onPressed: isActiveInference ? null : () => _activateModel(versionId),
+                    icon: const Icon(Icons.visibility, size: 18),
+                    label: Text(
+                      isActiveInference ? 'Active' : 'Use for Analysis',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                    ),
+                    style: TextButton.styleFrom(foregroundColor: Colors.blue.shade700),
+                  ),
                 if (status == 'archived')
                   TextButton.icon(
                     onPressed: () => _promoteModel(versionId),
@@ -264,6 +281,16 @@ class _AdminPageState extends State<AdminPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (canActivate)
+                  TextButton.icon(
+                    onPressed: isActiveInference ? null : () => _activateModel(versionId),
+                    icon: const Icon(Icons.visibility, size: 18),
+                    label: Text(
+                      isActiveInference ? 'Active' : 'Use for Analysis',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                    ),
+                    style: TextButton.styleFrom(foregroundColor: Colors.blue.shade700),
+                  ),
                 TextButton.icon(
                   onPressed: () => _showRollbackDialog(),
                   icon: const Icon(Icons.undo, size: 18),
@@ -284,6 +311,11 @@ class _AdminPageState extends State<AdminPage> {
     IconData icon;
 
     switch (status) {
+      case 'active':
+        bgColor = Colors.blue.shade100;
+        textColor = Colors.blue.shade800;
+        icon = Icons.visibility;
+        break;
       case 'production':
         bgColor = Colors.green.shade100;
         textColor = Colors.green.shade800;
@@ -357,13 +389,14 @@ class _AdminPageState extends State<AdminPage> {
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _modelHistory = List<Map<String, dynamic>>.from(data['models'] ?? []);
-          _currentProduction = data['current_production'];
-        });
-      } else {
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          setState(() {
+            _modelHistory = List<Map<String, dynamic>>.from(data['models'] ?? []);
+            _currentProduction = data['current_production'];
+            _activeInference = data['active_inference'];
+          });
+        } else {
         throw Exception('Failed to fetch: ${response.statusCode}');
       }
     } catch (e) {
@@ -461,6 +494,35 @@ class _AdminPageState extends State<AdminPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _activateModel(String versionId) async {
+    try {
+      final token = await AuthService().getToken();
+      final response = await http.post(
+        ApiConfig.adminActivateModelUri(versionId),
+        headers: ApiConfig.buildHeaders(json: true, token: token),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Active model set to $versionId', style: GoogleFonts.inter()),
+            backgroundColor: Colors.blue.shade700,
+          ),
+        );
+        _fetchModelHistory();
+      } else {
+        throw Exception('Failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Activate failed: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red.shade700),
+      );
+    }
   }
 
   Future<void> _rollbackToModel(String versionId) async {

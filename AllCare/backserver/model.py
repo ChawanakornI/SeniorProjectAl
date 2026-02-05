@@ -95,20 +95,18 @@ class ModelService:
             except Exception as exc:
                 print(f"[model] torchscript load failed: {exc}")
 
-        # 2) Try checkpoint with state_dict (ResNet50 with dropout + linear head)
+        # 2) Try checkpoint with state_dict (ResNet50 or EfficientNetV2-M)
         try:
             checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
             state_dict = None
+            architecture = None
             if isinstance(checkpoint, dict):
                 state_dict = checkpoint.get("model_state_dict") or checkpoint.get("state_dict")
+                architecture = checkpoint.get("architecture")
             if state_dict:
-                base_weights = getattr(models, "ResNet50_Weights", None)
-                weights = base_weights.IMAGENET1K_V2 if base_weights else None
-                model = models.resnet50(weights=weights)
-                num_classes = len(self.class_names)
-                in_features = model.fc.in_features
-                # Match training head: Dropout(0.3) + Linear
-                model.fc = nn.Sequential(nn.Dropout(p=0.3), nn.Linear(in_features, num_classes))
+                if architecture is None:
+                    architecture = self._detect_architecture_from_state_dict(state_dict)
+                model = self._create_model(architecture)
                 model.load_state_dict(state_dict)
                 model.to(self.device).eval()
                 
@@ -117,7 +115,8 @@ class ModelService:
                 #     model.apply(self._set_deterministic_flags)
                 
                 self.model = model
-                print(f"[model] loaded resnet50 checkpoint from {self.model_path}")
+                arch_label = architecture or "unknown"
+                print(f"[model] loaded {arch_label} checkpoint from {self.model_path}")
                 return
             # If the loaded object is already a module, use it directly
             if hasattr(checkpoint, "eval") and callable(getattr(checkpoint, "eval")):
@@ -131,6 +130,36 @@ class ModelService:
             print(f"[model] checkpoint load failed: {exc}")
 
         print("[model] unable to load model; running in dummy mode.")
+
+    def _detect_architecture_from_state_dict(self, state_dict) -> str | None:
+        keys = list(state_dict.keys())
+        if any("features.0.0" in k for k in keys):
+            return "efficientnet_v2_m"
+        if any("layer1" in k for k in keys):
+            return "resnet50"
+        return None
+
+    def _create_model(self, architecture: str | None):
+        num_classes = len(self.class_names)
+        arch = (architecture or "resnet50").lower()
+        if arch == "efficientnet_v2_m":
+            model = models.efficientnet_v2_m(weights=None)
+            in_features = model.classifier[1].in_features
+            model.classifier = nn.Sequential(
+                nn.Dropout(p=0.3, inplace=True),
+                nn.Linear(in_features, num_classes),
+            )
+            return model
+        # Default to ResNet50
+        model = models.resnet50(weights=None)
+        in_features = model.fc.in_features
+        model.fc = nn.Sequential(nn.Dropout(p=0.3), nn.Linear(in_features, num_classes))
+        return model
+
+    def set_model_path(self, model_path: str) -> None:
+        self.model_path = model_path
+        self.model = None
+        self._load()
 
     # def _set_deterministic_flags(self, module):
     #     """
