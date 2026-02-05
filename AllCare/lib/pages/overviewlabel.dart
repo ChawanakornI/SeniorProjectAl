@@ -48,10 +48,7 @@ class _LabelPageState extends State<LabelPage> {
     });
 
     try {
-      final data = await caseService.fetchActiveLearningCandidates(
-        topK: 5,
-        entryType: 'reject',
-      );
+      final data = await caseService.fetchActiveLearningCandidates();
       final mapped = data.map(_mapCandidateToView).toList();
       final Map<String, _AlCaseView> unique = {};
       for (final item in mapped) {

@@ -11,7 +11,7 @@ def _get_env_list(key: str, default: str = "") -> List[str]:
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "assets" / "models" / "ham10000_efficientnetV2m_7class_torchscript.pt"
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "assets" / "model" / "ham10000_efficientnetV2m_7class_torchscript.pt"
 
 BACKSERVER_HOST: str = os.getenv("BACKSERVER_HOST", "0.0.0.0")
 BACKSERVER_PORT: int = int(os.getenv("BACKSERVER_PORT", "8000"))
@@ -59,6 +59,12 @@ AL_MODEL_REGISTRY_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "db", "model_regis
 AL_LABELS_POOL_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "db", "labels_pool.jsonl")
 AL_EVENT_LOG_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "db", "event_log.jsonl")
 AL_ACTIVE_CONFIG_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "config", "active_config.json")
+
+# Active Learning candidate selection defaults
+AL_CANDIDATES_TOP_K: int = int(os.getenv("AL_CANDIDATES_TOP_K", "5")) #เลือกtop k ว่าแสดงกี่caseดี
+AL_CANDIDATES_INCLUDE_LABELED: bool = os.getenv("AL_CANDIDATES_INCLUDE_LABELED", "false").strip().lower() in ("1", "true", "yes") # ไม่รวมเคสที่เคยถูก label แล้ว(ไม่กลับมาคิดmarginอีก)
+AL_CANDIDATES_ENTRY_TYPE: str = os.getenv("AL_CANDIDATES_ENTRY_TYPE", "").strip()
+AL_CANDIDATES_STATUS: str = os.getenv("AL_CANDIDATES_STATUS", "").strip() # ถ้าว่างจะไม่กรองตามสถานะ ปรับให้กรองได้นะจ๊ะ
 
 # Label map for skin lesion classification (HAM10000 classes)
 LABEL_MAP: dict = {

@@ -922,9 +922,10 @@ async def get_active_learning_candidates_endpoint(payload: Dict[str, Any], user_
     For GPs, considers only their own cases.
     """
     user_role = user_context.get("user_role", "").lower()
-    top_k = payload.get('top_k', 5)
-    entry_type_filter = (payload.get('entry_type') or '').strip().lower()
-    status_filter = (payload.get('status') or '').strip().lower()
+    top_k = payload.get('top_k', config.AL_CANDIDATES_TOP_K)
+    entry_type_filter = (payload.get('entry_type') or config.AL_CANDIDATES_ENTRY_TYPE or '').strip().lower()
+    status_filter = (payload.get('status') or config.AL_CANDIDATES_STATUS or '').strip().lower()
+    include_labeled = bool(payload.get('include_labeled', config.AL_CANDIDATES_INCLUDE_LABELED))
 
     # Get entries based on user role
     if user_role in {"doctor", "admin"}:
@@ -938,11 +939,19 @@ async def get_active_learning_candidates_endpoint(payload: Dict[str, Any], user_
     if not entries:
         return {"candidates": [], "total_candidates": 0, "message": "No cases available"}
 
-    # Compute margin for all cases
-    candidates_entries = [
-        e for e in entries
-        if not e.get('correct_label')
-    ]
+    # Compute margin for all cases (only case-level entries)
+    case_entry_types = {"case", "uncertain", "reject"}
+    if include_labeled:
+        candidates_entries = [
+            e for e in entries
+            if (e.get('entry_type') or '').strip().lower() in case_entry_types
+        ]
+    else:
+        candidates_entries = [
+            e for e in entries
+            if (e.get('entry_type') or '').strip().lower() in case_entry_types
+            and not e.get('correct_label')
+        ]
     if entry_type_filter:
         candidates_entries = [
             e for e in candidates_entries
@@ -980,7 +989,10 @@ async def get_active_learning_candidates_endpoint(payload: Dict[str, Any], user_
     if not cases:
         return {"candidates": [], "total_candidates": 0, "message": "No cases with images available"}
 
-    result = get_active_learning_candidates(cases, top_k)
+    effective_top_k = top_k
+    if effective_top_k is None or int(effective_top_k) <= 0:
+        effective_top_k = len(cases)
+    result = get_active_learning_candidates(cases, int(effective_top_k))
     return result
 
 
