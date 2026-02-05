@@ -27,6 +27,7 @@ class CaseSummaryScreen extends StatefulWidget {
   final int? imageCount;
   final String? aggregationInfo;
   final bool isPrePrediction; // NEW: Flag to show Edit/Run Prediction buttons
+  final int predictIndex; // Index of image to use for prediction (from carousel)
 
   const CaseSummaryScreen({
     super.key,
@@ -44,6 +45,7 @@ class CaseSummaryScreen extends StatefulWidget {
     this.imageCount,
     this.aggregationInfo,
     this.isPrePrediction = false, // Default to old behavior
+    this.predictIndex = 0, // Default to first image
   });
 
   @override
@@ -123,7 +125,9 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
   @override
   void initState() {
     super.initState();
-    _imagePageController = PageController();
+    // Start carousel at the selected prediction image index
+    _currentImageIndex = widget.predictIndex;
+    _imagePageController = PageController(initialPage: widget.predictIndex);
     _fallbackCreatedAt = DateTime.now().toIso8601String();
   }
 
@@ -251,16 +255,33 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                           ),
                           const SizedBox(width: 6),
                           Flexible(
-                            child: Text(
-                              '${_allImagePaths.length} image${_allImagePaths.length > 1 ? 's' : ''} being analyzed',
-                              style: TextStyle(
-                                color:
-                                    isDarkLoading
-                                        ? Colors.white60
-                                        : Colors.grey[600],
-                                fontSize: 12,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                            child: Builder(
+                              builder: (_) {
+                                final totalImages = _allImagePaths.length;
+                                final safeIndex =
+                                    totalImages == 0
+                                        ? 0
+                                        : (_currentImageIndex < 0
+                                            ? 0
+                                            : (_currentImageIndex >= totalImages
+                                                ? totalImages - 1
+                                                : _currentImageIndex));
+                                final label =
+                                    totalImages > 1
+                                        ? 'Selected image ${safeIndex + 1} of $totalImages'
+                                        : 'Selected image';
+                                return Text(
+                                  '$label being analyzed',
+                                  style: TextStyle(
+                                    color:
+                                        isDarkLoading
+                                            ? Colors.white60
+                                            : Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              },
                             ),
                           ),
                         ],
@@ -276,19 +297,25 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
     );
 
     try {
-      // Run prediction
-      final predictionResult = await context.read<PredictionService>().predictMultiple(
-        _allImagePaths,
-        caseId: widget.caseId,
-      );
+      // Run prediction on the selected image only
+      final safeIndex =
+          _currentImageIndex < _allImagePaths.length ? _currentImageIndex : 0;
+      final selectedPath = _allImagePaths[safeIndex];
+      final predictionResult =
+          await context.read<PredictionService>().predictSingle(
+                selectedPath,
+                caseId: widget.caseId,
+              );
       final predictions =
-          predictionResult['predictions'] as List<Map<String, dynamic>>;
+          (predictionResult['predictions'] as List<dynamic>? ?? [])
+              .map((p) => p as Map<String, dynamic>)
+              .toList();
 
       if (!mounted) return;
       Navigator.of(context).pop(); // Close loading dialog
       setState(() => _isLoading = false);
 
-      // Navigate to Result screen
+      // Navigate to Result screen with the selected prediction index
       final result = await Navigator.of(context).push<String>(
         MaterialPageRoute(
           builder:
@@ -300,9 +327,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                 symptoms: widget.symptoms,
                 imagePaths: _allImagePaths,
                 predictions: predictions,
-                imageCount: _allImagePaths.length,
-                aggregationInfo:
-                    'Aggregated from ${_allImagePaths.length} images',
+                selectedPredictionIndex: safeIndex,
               ),
         ),
       );
@@ -586,18 +611,75 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                                             );
                                           },
                                           itemBuilder: (context, index) {
+                                            // Show badge on currently viewed image (will be used for prediction)
+                                            final isSelectedForPrediction = index == _currentImageIndex;
                                             return Padding(
                                               padding:
                                                   const EdgeInsets.symmetric(
                                                     horizontal: 4,
                                                   ),
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                child: _buildDiagnosticImage(
-                                                  diagnosticPaths[index],
-                                                  isDark,
-                                                ),
+                                              child: Stack(
+                                                children: [
+                                                  ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(12),
+                                                    child: _buildDiagnosticImage(
+                                                      diagnosticPaths[index],
+                                                      isDark,
+                                                    ),
+                                                  ),
+                                                  // "Selected for Prediction" badge
+                                                  if (isSelectedForPrediction)
+                                                    Positioned(
+                                                      bottom: 12,
+                                                      left: 0,
+                                                      right: 0,
+                                                      child: Center(
+                                                        child: ClipRRect(
+                                                          borderRadius: BorderRadius.circular(16),
+                                                          child: BackdropFilter(
+                                                            filter: ImageFilter.blur(
+                                                              sigmaX: 8,
+                                                              sigmaY: 8,
+                                                            ),
+                                                            child: Container(
+                                                              padding: const EdgeInsets.symmetric(
+                                                                horizontal: 12,
+                                                                vertical: 6,
+                                                              ),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.blue.withValues(alpha: 0.7),
+                                                                borderRadius: BorderRadius.circular(16),
+                                                                border: Border.all(
+                                                                  color: Colors.white.withValues(alpha: 0.3),
+                                                                  width: 1,
+                                                                ),
+                                                              ),
+                                                              child: const Row(
+                                                                mainAxisSize: MainAxisSize.min,
+                                                                children: [
+                                                                  Icon(
+                                                                    Icons.check_circle,
+                                                                    color: Colors.white,
+                                                                    size: 14,
+                                                                  ),
+                                                                  SizedBox(width: 6),
+                                                                  Text(
+                                                                    'Selected for Prediction',
+                                                                    style: TextStyle(
+                                                                      color: Colors.white,
+                                                                      fontSize: 11,
+                                                                      fontWeight: FontWeight.w600,
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                ],
                                               ),
                                             );
                                           },
@@ -656,6 +738,9 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                                         (index) {
                                           final isActive =
                                               index == _currentImageIndex;
+                                          // The current image is the one that will be used for prediction
+                                          final isPredictIndex =
+                                              index == _currentImageIndex;
                                           return AnimatedContainer(
                                             duration: const Duration(
                                               milliseconds: 200,
@@ -668,16 +753,17 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
                                             decoration: BoxDecoration(
                                               borderRadius:
                                                   BorderRadius.circular(3),
-                                              color:
-                                                  isActive
-                                                      ? (isDark
+                                              color: isActive
+                                                  ? (isPredictIndex
+                                                      ? Colors.green[500]
+                                                      : (isDark
                                                           ? Colors.blue[400]
-                                                          : Colors.blue[600])
+                                                          : Colors.blue[600]))
+                                                  : (isPredictIndex
+                                                      ? Colors.green[300]
                                                       : (isDark
                                                           ? Colors.white24
-                                                          : Colors
-                                                              .grey
-                                                              .shade300),
+                                                          : Colors.grey.shade300)),
                                             ),
                                           );
                                         },

@@ -1043,6 +1043,7 @@ class _HomePageState extends State<HomePage> {
                   createdAt: record.createdAt,
                   updatedAt: record.updatedAt,
                   isPrePrediction: false, // Already has predictions
+                  predictIndex: record.selectedPredictionIndex ?? 0,
                 ),
           ),
         );
@@ -1363,32 +1364,32 @@ class _HomePageState extends State<HomePage> {
                             },
                           ),
 
-                          const SizedBox(height: 18),
-
-                          _buildPatientTypeCard(
-                            icon: Icons.face,
-                            title: 'Acne',
-                            description:
-                                'For assessing acne severity and inflammation.',
-                            isDark: isDark,
-                            onTap: () {
-                              HapticFeedback.mediumImpact();
-                              _navigateWithFade(
-                                const NewCaseScreen(),
-                                replace: false,
-                              );
-                              Future.delayed(
-                                const Duration(milliseconds: 300),
-                                () {
-                                  if (mounted) {
-                                    setState(() {
-                                      _showPatientTypeModal = false;
-                                    });
-                                  }
-                                },
-                              );
-                            },
-                          ),
+                          // const SizedBox(height: 18),
+                          // since we don't use Acne for now
+                          // _buildPatientTypeCard(
+                          //   icon: Icons.face,
+                          //   title: 'Acne',
+                          //   description:
+                          //       'For assessing acne severity and inflammation.',
+                          //   isDark: isDark,
+                          //   onTap: () {
+                          //     HapticFeedback.mediumImpact();
+                          //     _navigateWithFade(
+                          //       const NewCaseScreen(),
+                          //       replace: false,
+                          //     );
+                          //     Future.delayed(
+                          //       const Duration(milliseconds: 300),
+                          //       () {
+                          //         if (mounted) {
+                          //           setState(() {
+                          //             _showPatientTypeModal = false;
+                          //           });
+                          //         }
+                          //       },
+                              // );
+                           // },
+                          // ),
                         ],
                       ),
                     ),
