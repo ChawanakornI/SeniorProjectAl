@@ -1,16 +1,16 @@
 
 import json
+import os
 import threading
 import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-import subprocess
 from fastapi.staticfiles import StaticFiles
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Depends
+from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 
@@ -20,7 +20,7 @@ from . import crypto_utils
 from .model import ModelService
 
 from .AL import get_active_learning_candidates
-from .retrain_model import get_retrain_status, retrain_model, check_retrain_threshold
+from .retrain_model import get_retrain_status, retrain_model, check_retrain_threshold, get_available_training_sample_count
 from . import model_registry
 from . import training_config
 from . import labels_pool
@@ -696,7 +696,10 @@ async def get_retrain_status_endpoint(user_context: Dict[str, str] = Depends(get
 
 
 @app.post("/model/retrain", dependencies=[Depends(require_api_key)])
-async def retrain_model_endpoint(user_context: Dict[str, str] = Depends(get_user_context)):
+async def retrain_model_endpoint(
+    background_tasks: BackgroundTasks,
+    user_context: Dict[str, str] = Depends(get_user_context)
+):
     """
     Trigger model retraining using labeled data from active learning.
     Only admins can trigger retraining.
@@ -707,32 +710,22 @@ async def retrain_model_endpoint(user_context: Dict[str, str] = Depends(get_user
         raise HTTPException(status_code=403, detail="Only admins can trigger model retraining")
 
     try:
-        total_rejected_labeled = _count_rejected_labeled_images(_read_all_metadata_entries())
-        if total_rejected_labeled < config.RETRAIN_MIN_NEW_LABELS:
+        available_samples = get_available_training_sample_count()
+        if available_samples < config.RETRAIN_MIN_NEW_LABELS:
             return {
                 "status": "skipped",
                 "reason": "insufficient_rejected_labels",
                 "required": config.RETRAIN_MIN_NEW_LABELS,
-                "current": total_rejected_labeled,
+                "current": available_samples,
             }
 
-        # Run retraining script asynchronously
-        script_path = Path(__file__).parent / "retrain_model.py"
+        # Start retraining in background (no hardcoded params; uses config)
+        background_tasks.add_task(retrain_model)
 
-        # Start retraining in background
-        process = subprocess.Popen([
-            "python", str(script_path),
-            "--epochs", "5",
-            "--batch-size", "16",
-            "--learning-rate", "0.0001",
-            "--min-samples", "10"
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        # Return immediately with process info
         return {
             "status": "retraining_started",
             "message": "Model retraining has been started in the background",
-            "process_id": process.pid
+            "current": available_samples
         }
 
     except Exception as e:
@@ -794,6 +787,14 @@ async def submit_case_label(
     # Save updated metadata using JSONL format
     _write_metadata_entries(metadata_path, metadata)
 
+    # Add to labels pool for retraining
+    labels_pool.add_label(
+        case_id=case_id,
+        image_paths=entry.get("image_paths", []),
+        correct_label=payload.correct_label,
+        user_id=user_id
+    )
+
     return {
         "status": "ok",
         "message": "Label submitted successfully",
@@ -850,20 +851,29 @@ async def save_annotations(
     case_user_id = (payload.case_user_id or "").strip()
     target_user_id = case_user_id or user_id
 
+    allowed_entry_types = {
+        (t or "").strip().lower()
+        for t in (config.AL_ANNOTATION_ENTRY_TYPES or [])
+        if (t or "").strip()
+    }
+    if not allowed_entry_types:
+        allowed_entry_types = {"reject"}
+
     def _find_rejected_case_index(case_entries: List[Dict[str, Any]]) -> Optional[int]:
         for i in range(len(case_entries) - 1, -1, -1):
             entry = case_entries[i]
-            if entry.get("case_id") == case_id and entry.get("entry_type") == "reject":
+            entry_type = (entry.get("entry_type") or "").strip().lower()
+            if entry.get("case_id") == case_id and entry_type in allowed_entry_types:
                 return i
         return None
 
     metadata_path = _user_metadata_path(target_user_id)
     entries = _read_metadata_entries(metadata_path)
 
-    # Find the rejected case entry for the target user
+    # Find the case entry for the target user
     case_index = _find_rejected_case_index(entries)
 
-    # Allow doctors/admins to annotate rejected cases across users when needed
+    # Allow doctors/admins to annotate cases across users when needed
     if case_index is None and not case_user_id and user_role.lower() in {"doctor", "admin"}:
         matched = None
         for _, candidate_path in _iter_user_metadata_paths():
@@ -883,7 +893,7 @@ async def save_annotations(
     if case_index is None:
         if case_user_id and not metadata_path.exists():
             raise HTTPException(status_code=404, detail="User metadata not found")
-        raise HTTPException(status_code=404, detail="Rejected case not found")
+        raise HTTPException(status_code=404, detail="Case not found for annotation")
     
     # Block GP role from annotating rejected cases
     if user_role.lower() == "gp":
@@ -902,6 +912,14 @@ async def save_annotations(
 
     entries[case_index] = entry
     _write_metadata_entries(metadata_path, entries)
+
+    # Add to labels pool for retraining
+    labels_pool.add_label(
+        case_id=case_id,
+        image_paths=entry.get("image_paths", []),
+        correct_label=payload.correct_label,
+        user_id=user_id
+    )
 
     return {
         "status": "ok",
@@ -1054,11 +1072,13 @@ async def list_models(
     """List all models, optionally filtered by status."""
     models = model_registry.list_models(status=status)
     production = model_registry.get_production_model()
+    active_inference = model_registry.get_active_inference_model()
 
     return {
         "status": "ok",
         "models": models,
         "current_production": production["version_id"] if production else None,
+        "active_inference": active_inference["version_id"] if active_inference else None,
         "total": len(models)
     }
 
@@ -1078,6 +1098,46 @@ async def get_production_model(user_context: Dict[str, str] = Depends(require_ad
     return {
         "status": "ok",
         "production_model": production
+    }
+
+
+@app.get("/admin/models/active", dependencies=[Depends(require_api_key)])
+async def get_active_inference_model(user_context: Dict[str, str] = Depends(require_admin_role)):
+    """Get the active inference model info."""
+    active = model_registry.get_active_inference_model()
+    return {
+        "status": "ok",
+        "active_inference": active
+    }
+
+
+@app.post("/admin/models/{version_id}/activate", dependencies=[Depends(require_api_key)])
+async def activate_inference_model(
+    version_id: str,
+    user_context: Dict[str, str] = Depends(require_admin_role)
+):
+    """Activate a model for inference (candidates or production)."""
+    model = model_registry.get_model(version_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    status = (model.get("status") or "").lower()
+    if status not in {"production", "evaluating"}:
+        raise HTTPException(status_code=400, detail="Only production or candidate models can be activated")
+
+    path = model.get("production_path") or model.get("path")
+    if not path or not os.path.exists(path):
+        raise HTTPException(status_code=400, detail="Model file not found on disk")
+
+    if not model_registry.set_active_inference_model(version_id, path):
+        raise HTTPException(status_code=400, detail="Failed to set active inference model")
+
+    model_service.set_model_path(path)
+
+    return {
+        "status": "ok",
+        "message": f"Active inference model set to {version_id}",
+        "active_inference": {"version_id": version_id, "path": path}
     }
 
 
@@ -1231,6 +1291,11 @@ async def get_labels(
 
 
 model_service = ModelService(conf_threshold=config.CONF_THRESHOLD)
+active_inference = model_registry.get_active_inference_model()
+if active_inference:
+    active_path = active_inference.get("active_path") or active_inference.get("path")
+    if active_path:
+        model_service.set_model_path(active_path)
 
 if __name__ == "__main__":
     import uvicorn

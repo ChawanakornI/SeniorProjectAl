@@ -24,10 +24,15 @@ class ModelStatus:
 def _load_registry() -> Dict[str, Any]:
     """Load the model registry from disk."""
     if not os.path.exists(config.AL_MODEL_REGISTRY_FILE):
-        return {"models": {}, "current_production": None, "pending_promotion": None}
+        return {"models": {}, "current_production": None, "pending_promotion": None, "active_inference": None}
 
     with open(config.AL_MODEL_REGISTRY_FILE, "r") as f:
-        return json.load(f)
+        registry = json.load(f)
+    if "active_inference" not in registry:
+        registry["active_inference"] = None
+    if "models" not in registry:
+        registry["models"] = {}
+    return registry
 
 
 def _save_registry(registry: Dict[str, Any]) -> None:
@@ -183,6 +188,32 @@ def promote_model(version_id: str) -> bool:
         # Keep original in candidates for reference, update path to production copy
         registry["models"][version_id]["production_path"] = prod_path
 
+    _save_registry(registry)
+    return True
+
+
+def get_active_inference_model() -> Optional[Dict[str, Any]]:
+    """Get the active inference model info."""
+    registry = _load_registry()
+    active = registry.get("active_inference")
+    if not active:
+        return None
+    version_id = active.get("version_id")
+    if not version_id:
+        return None
+    model = get_model(version_id)
+    if not model:
+        return None
+    model["active_path"] = active.get("path")
+    return model
+
+
+def set_active_inference_model(version_id: str, path: str) -> bool:
+    """Set the active inference model by version id and path."""
+    registry = _load_registry()
+    if version_id not in registry.get("models", {}):
+        return False
+    registry["active_inference"] = {"version_id": version_id, "path": path}
     _save_registry(registry)
     return True
 

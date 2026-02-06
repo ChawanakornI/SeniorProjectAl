@@ -20,7 +20,11 @@ MODEL_PATH: str = os.getenv("MODEL_PATH", str(DEFAULT_MODEL_PATH))
 MODEL_DEVICE: str = os.getenv("MODEL_DEVICE", "").strip().lower()
 BLUR_THRESHOLD: float = float(os.getenv("BLUR_THRESHOLD", "50.0"))
 CONF_THRESHOLD: float = float(os.getenv("CONF_THRESHOLD", "0.5"))
-RETRAIN_MIN_NEW_LABELS: int = int(os.getenv("RETRAIN_MIN_NEW_LABELS", "10"))
+RETRAIN_MIN_NEW_LABELS: int = int(os.getenv("RETRAIN_MIN_NEW_LABELS", "2"))
+RETRAIN_DEFAULT_EPOCHS: int = int(os.getenv("RETRAIN_DEFAULT_EPOCHS", "1"))
+RETRAIN_DEFAULT_BATCH_SIZE: int = int(os.getenv("RETRAIN_DEFAULT_BATCH_SIZE", "16"))
+# Retrain device preference: "auto", "cuda", or "cpu"
+RETRAIN_DEVICE: str = os.getenv("RETRAIN_DEVICE", "auto").strip().lower()
 _storage_root = os.getenv("STORAGE_ROOT") or os.getenv("STORAGE_DIR")
 STORAGE_ROOT: str = _storage_root or os.path.join(os.path.dirname(__file__), "storage")
 USER_STORAGE_PREFIX: str = os.getenv("USER_STORAGE_PREFIX", "user")
@@ -35,7 +39,7 @@ CASE_COUNTER_FILE: str = os.getenv(
     os.path.join(STORAGE_ROOT, "case_counter.json"),
 )
 ALLOWED_ORIGINS: List[str] = _get_env_list("ALLOWED_ORIGINS", "*")
-API_KEY: str = os.getenv("API_KEY", "")
+API_KEY: str = os.getenv("API_KEY", "abc123")
 ENCRYPT_STORAGE: bool = os.getenv("ENCRYPT_STORAGE", "").strip().lower() in ("1", "true", "yes")
 DATA_ENCRYPTION_KEY: str = os.getenv("DATA_ENCRYPTION_KEY", "").strip()
 TLS_CERT_FILE: str = os.getenv("TLS_CERT_FILE", "").strip()
@@ -65,6 +69,8 @@ AL_CANDIDATES_TOP_K: int = int(os.getenv("AL_CANDIDATES_TOP_K", "5")) #เลื
 AL_CANDIDATES_INCLUDE_LABELED: bool = os.getenv("AL_CANDIDATES_INCLUDE_LABELED", "false").strip().lower() in ("1", "true", "yes") # ไม่รวมเคสที่เคยถูก label แล้ว(ไม่กลับมาคิดmarginอีก)
 AL_CANDIDATES_ENTRY_TYPE: str = os.getenv("AL_CANDIDATES_ENTRY_TYPE", "").strip()
 AL_CANDIDATES_STATUS: str = os.getenv("AL_CANDIDATES_STATUS", "").strip() # ถ้าว่างจะไม่กรองตามสถานะ ปรับให้กรองได้นะจ๊ะ
+# Allowed entry types for annotation updates
+AL_ANNOTATION_ENTRY_TYPES: List[str] = _get_env_list("AL_ANNOTATION_ENTRY_TYPES", "reject,case")
 
 # Label map for skin lesion classification (HAM10000 classes)
 LABEL_MAP: dict = {
