@@ -55,6 +55,8 @@ class CaseLog(BaseModel):
     symptoms: List[str] = Field(default_factory=list)
     image_paths: List[str] = Field(default_factory=list)  # Paths to captured images
     created_at: Optional[str] = None  # ISO format timestamp
+    isLabeled: Optional[bool] = False # this is for checking whether image have been labeled or not [ labeled mean annotated or changed by user in annotate screen]
+    selected_prediction_index: Optional[int] = None  # Index of image selected for prediction
 
 
 class CaseIdRelease(BaseModel):
@@ -76,6 +78,7 @@ class CaseUpdate(BaseModel):
     symptoms: Optional[List[str]] = None
     image_paths: Optional[List[str]] = None
     created_at: Optional[str] = None
+    selected_prediction_index: Optional[int] = None  # Index of image selected for prediction
 
 
 class RejectCase(BaseModel):
@@ -93,6 +96,7 @@ class RejectCase(BaseModel):
     symptoms: List[str] = Field(default_factory=list)
     image_paths: List[str] = Field(default_factory=list)
     created_at: Optional[str] = None
+    selected_prediction_index: Optional[int] = None  # Index of image selected for prediction
 
 
 class LabelSubmission(BaseModel):
@@ -168,3 +172,34 @@ ROLE_PERMISSIONS = {
 def get_user_permissions(role: UserRole) -> dict:
     """Get permissions dict for a given role."""
     return ROLE_PERMISSIONS.get(role, {})
+
+
+# =============================================================================
+# Active Learning Admin Schemas
+# =============================================================================
+
+class TrainingConfigRequest(BaseModel):
+    """Request body for updating training configuration."""
+    epochs: Optional[int] = Field(None, ge=1, le=100)
+    batch_size: Optional[int] = Field(None, ge=1, le=128)
+    learning_rate: Optional[float] = Field(None, ge=1e-6, le=1.0)
+    optimizer: Optional[str] = Field(None, pattern="^(Adam|SGD|AdamW|RMSprop)$")
+    dropout: Optional[float] = Field(None, ge=0.0, le=0.9)
+    augmentation_applied: Optional[bool] = None
+
+
+class ModelPromoteRequest(BaseModel):
+    """Request body for manual model promotion."""
+    reason: Optional[str] = "Manual promotion"
+
+
+class ModelRollbackRequest(BaseModel):
+    """Request body for model rollback."""
+    to_version: Optional[str] = None  # If None, rollback to most recent archived
+    reason: Optional[str] = "Manual rollback"
+
+
+class RetrainTriggerRequest(BaseModel):
+    """Request body for manually triggering retraining."""
+    architecture: Optional[str] = None  # Override architecture (efficientnet_v2_m or resnet50)
+    force: bool = False  # Force even if below threshold

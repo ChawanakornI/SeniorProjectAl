@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import '../app_state.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../theme/glass.dart';
 import '../features/case/case_service.dart';
@@ -25,6 +26,9 @@ class ResultScreen extends StatefulWidget {
   final int? imageCount;
   final String? aggregationInfo;
 
+  /// Index of the image selected for prediction (from carousel in CaseSummaryScreen)
+  final int selectedPredictionIndex;
+
   const ResultScreen({
     super.key,
     required this.caseId,
@@ -37,6 +41,7 @@ class ResultScreen extends StatefulWidget {
     this.perImagePredictions = const [],
     this.imageCount,
     this.aggregationInfo,
+    this.selectedPredictionIndex = 0,
   });
 
   @override
@@ -45,7 +50,6 @@ class ResultScreen extends StatefulWidget {
 
 class _ResultScreenState extends State<ResultScreen> {
   bool _showDetails = false;
-  bool _isRejected = false;
 
   // Per-image decision: Map of image index to decision
   final Map<int, String?> _imageDecisions = {};
@@ -60,10 +64,6 @@ class _ResultScreenState extends State<ResultScreen> {
     'nv': 'Melanocytic nevi',
     'vasc': 'Vascular lesions',
   };
-
-  // For image carousel
-  late final PageController _imagePageController;
-  int _currentImageIndex = 0;
 
   // Get risk level based on confidence
   String _getRiskLevel(double confidence) {
@@ -110,6 +110,20 @@ class _ResultScreenState extends State<ResultScreen> {
     }
   }
 
+  /// Get the path to the selected image for prediction
+  String get _selectedImagePath {
+    final index = widget.selectedPredictionIndex;
+    if (index >= 0 && index < widget.imagePaths.length) {
+      return widget.imagePaths[index];
+    }
+    return widget.imagePaths.isNotEmpty ? widget.imagePaths.first : '';
+  }
+
+  /// Get predictions for the selected image
+  List<Map<String, dynamic>> get _selectedPredictions {
+    return _predictionsForImage(widget.selectedPredictionIndex);
+  }
+
   List<Map<String, dynamic>> _predictionsForImage(int index) {
     if (index >= 0 &&
         index < widget.perImagePredictions.length &&
@@ -145,19 +159,15 @@ class _ResultScreenState extends State<ResultScreen> {
     return payload;
   }
 
-  String? _trimmedNote() {
-    final note = _noteController.text.trim();
-    return note.isEmpty ? null : note;
-  }
-
-  String? _noteWithDecisions() {
-    final note = _trimmedNote();
+  String? _noteWithDecisions(String? note) {
+    final trimmed = note?.trim();
+    final noteValue = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
     final decisions = _decisionPayload();
-    if (decisions.isEmpty) return note;
+    if (decisions.isEmpty) return noteValue;
 
     final decisionText = decisions.entries.map((e) => '${e.key}: ${e.value}').join(', ');
-    if (note == null) return 'Decisions: $decisionText';
-    return '$note\nDecisions: $decisionText';
+    if (noteValue == null) return 'Decisions: $decisionText';
+    return '$noteValue\nDecisions: $decisionText';
   }
 
   bool _isNetworkPath(String path) {
@@ -224,12 +234,10 @@ class _ResultScreenState extends State<ResultScreen> {
   @override
   void initState() {
     super.initState();
-    _imagePageController = PageController();
   }
 
   @override
   void dispose() {
-    _imagePageController.dispose();
     _noteController.dispose();
     super.dispose();
   }
@@ -250,11 +258,13 @@ class _ResultScreenState extends State<ResultScreen> {
             Color(0xFFFFFFFF),
           ];
 
-    final topConfidence = _topConfidenceForImage(_currentImageIndex);
-    final rawTopLabel = _topRawLabelForImage(_currentImageIndex);
+    // Use the selected prediction index instead of current carousel index
+    final selectedIndex = widget.selectedPredictionIndex;
+    final topConfidence = _topConfidenceForImage(selectedIndex);
+    final rawTopLabel = _topRawLabelForImage(selectedIndex);
     final topLabel = _displayLabel(rawTopLabel);
     final riskLevel = _getRiskLevel(topConfidence);
-    final currentPredictions = _predictionsForImage(_currentImageIndex);
+    final currentPredictions = _predictionsForImage(selectedIndex);
 
     final scheme =
         _isCancerLikeLabel(rawTopLabel) ? GradientScheme.red : GradientScheme.blue;
@@ -473,11 +483,13 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  /// Image Decisions section
+  /// Image Decisions section - Shows only the selected image (no carousel)
   Widget _buildImageDecisionsSection(bool isDark) {
-    final hasImages = widget.imagePaths.isNotEmpty;
-    final displayIndex = hasImages ? _currentImageIndex + 1 : 0;
-    final currentDecision = hasImages ? (_imageDecisions[_currentImageIndex] ?? "None") : "None";
+    final selectedIndex = widget.selectedPredictionIndex;
+    final hasImages = widget.imagePaths.isNotEmpty &&
+                      selectedIndex >= 0 &&
+                      selectedIndex < widget.imagePaths.length;
+    final currentDecision = hasImages ? (_imageDecisions[selectedIndex] ?? "None") : "None";
 
     Color decisionColor;
     switch (currentDecision.toLowerCase()) {
@@ -501,24 +513,27 @@ class _ResultScreenState extends State<ResultScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Image Decisions',
+              'Selected Image',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: isDark ? Colors.white : Colors.black,
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
-                borderRadius: BorderRadius.circular(12),
+            // Show which image is selected (e.g., "Image 2 of 3")
+            if (widget.imagePaths.length > 1)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.15),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Image ${selectedIndex + 1} of ${widget.imagePaths.length}',
+                  style: TextStyle(fontSize: 12, color: Colors.green[700], fontWeight: FontWeight.w600),
+                ),
               ),
-              child: Text(
-                '$displayIndex/${widget.imagePaths.length}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -544,7 +559,7 @@ class _ResultScreenState extends State<ResultScreen> {
         ),
         const SizedBox(height: 16),
 
-        if (widget.imagePaths.isNotEmpty)
+        if (hasImages)
           LayoutBuilder(
             builder: (context, constraints) {
               final imageSize = constraints.maxWidth < 340
@@ -552,278 +567,180 @@ class _ResultScreenState extends State<ResultScreen> {
                   : constraints.maxWidth < 420
                       ? 140.0
                       : 160.0;
-              final cardHeight = imageSize + 300;
 
-              return Column(
-                children: [
-                  SizedBox(
-                    height: cardHeight,
-                    child: _buildGlassCard(
-                      isDark: isDark,
-                      child: Stack(
-                        children: [
-                          PageView.builder(
-                            controller: _imagePageController,
-                            itemCount: widget.imagePaths.length,
-                            onPageChanged: (index) => setState(() => _currentImageIndex = index),
-                            itemBuilder: (context, index) {
-                              final imagePreds = _predictionsForImage(index);
-                              final rawTop = _topRawLabelForImage(index);
-                              final imageTopLabel = _displayLabel(rawTop);
-                              final imageTopConf = _topConfidenceForImage(index) * 100;
+              final imagePreds = _predictionsForImage(selectedIndex);
+              final rawTop = _topRawLabelForImage(selectedIndex);
+              final imageTopLabel = _displayLabel(rawTop);
+              final imageTopConf = _topConfidenceForImage(selectedIndex) * 100;
+              final scheme = _isCancerLikeLabel(rawTop) ? GradientScheme.red : GradientScheme.blue;
 
-                              final scheme =
-                                  _isCancerLikeLabel(rawTop) ? GradientScheme.red : GradientScheme.blue;
-
-                              return Column(
+              return _buildGlassCard(
+                isDark: isDark,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: _buildCaseImage(
+                            widget.imagePaths[selectedIndex],
+                            width: imageSize,
+                            height: imageSize,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Container(
+                            height: imageSize,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.25),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: SevenLayerGradientBox(
+                              radius: 18,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              scheme: scheme,
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(16),
-                                        child: _buildCaseImage(
-                                          widget.imagePaths[index],
-                                          width: imageSize,
-                                          height: imageSize,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 14),
-                                      Expanded(
-                                        child: Container(
-                                          height: imageSize,
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(18),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(alpha: 0.25),
-                                                blurRadius: 12,
-                                                offset: const Offset(0, 6),
-                                              ),
-                                            ],
-                                          ),
-                                          child: SevenLayerGradientBox(
-                                            radius: 18,
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                            scheme: scheme,
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  imageTopLabel.toUpperCase(),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 12,
-                                                    letterSpacing: 0.5,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 6),
-                                                Text(
-                                                  '${imageTopConf.toStringAsFixed(0)}%',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.w800,
-                                                    fontSize: 42,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  if (imagePreds.isNotEmpty) ...[
-                                    Text(
-                                      'Top findings',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: isDark ? Colors.white70 : Colors.grey[800],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    ...imagePreds.take(3).map((pred) {
-                                      final label = _displayLabel(pred['label'] as String?);
-                                      final conf = ((pred['confidence'] as num?)?.toDouble() ?? 0.0) * 100;
-                                      final risk = _getRiskLevel(conf / 100);
-
-                                      return Padding(
-                                        padding: const EdgeInsets.only(bottom: 6),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: (isDark ? Colors.white : Colors.black)
-                                                    .withValues(alpha: 0.06),
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                              child: Text(
-                                                label,
-                                                style: TextStyle(
-                                                  color: isDark ? Colors.white : Colors.black87,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              '${conf.toStringAsFixed(0)}%',
-                                              style: TextStyle(
-                                                color: isDark ? Colors.blue[200] : Colors.blue[700],
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              risk,
-                                              style: TextStyle(
-                                                color: _getRiskColor(risk),
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }),
-                                    const SizedBox(height: 12),
-                                  ],
                                   Text(
-                                    'Decision',
-                                    style: TextStyle(
-                                      fontSize: 16,
+                                    imageTopLabel.toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
                                       fontWeight: FontWeight.w700,
-                                      color: isDark ? Colors.white : Colors.black,
+                                      fontSize: 12,
+                                      letterSpacing: 0.5,
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.grey.shade300),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: DropdownButton<String>(
-                                        isExpanded: true,
-                                        value: _imageDecisions[index],
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w700,
-                                          color: isDark ? Colors.white : Colors.black87,
-                                        ),
-                                        hint: Text(
-                                          "doctor's decision",
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey[600]),
-                                        onChanged: (val) => setState(() => _imageDecisions[index] = val),
-                                        items: ['Confirm', 'Reject', 'Uncertain']
-                                            .map((d) => DropdownMenuItem(value: d, child: Text(d)))
-                                            .toList(),
-                                      ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '${imageTopConf.toStringAsFixed(0)}%',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 42,
                                     ),
                                   ),
                                 ],
-                              );
-                            },
+                              ),
+                            ),
                           ),
-                          if (widget.imagePaths.length > 1)
-                            Positioned(
-                              top: 12,
-                              right: 16,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: BackdropFilter(
-                                  filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.5),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      '${_currentImageIndex + 1}/${widget.imagePaths.length}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (imagePreds.isNotEmpty) ...[
+                      Text(
+                        'Top findings',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white70 : Colors.grey[800],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...imagePreds.take(3).map((pred) {
+                        final label = _displayLabel(pred['label'] as String?);
+                        final conf = ((pred['confidence'] as num?)?.toDouble() ?? 0.0) * 100;
+                        final risk = _getRiskLevel(conf / 100);
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: (isDark ? Colors.white : Colors.black)
+                                      .withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  label,
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black87,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (widget.imagePaths.length > 1) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(widget.imagePaths.length, (index) {
-                        final isActive = index == _currentImageIndex;
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: isActive ? 18 : 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(3),
-                            color: isActive
-                                ? (isDark ? Colors.blue[400] : Colors.blue[600])
-                                : (isDark ? Colors.white24 : Colors.grey.shade300),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${conf.toStringAsFixed(0)}%',
+                                style: TextStyle(
+                                  color: isDark ? Colors.blue[200] : Colors.blue[700],
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                risk,
+                                style: TextStyle(
+                                  color: _getRiskColor(risk),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       }),
+                      const SizedBox(height: 12),
+                    ],
+                    Text(
+                      'Decision',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          value: _imageDecisions[selectedIndex],
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                          hint: Text(
+                            "doctor's decision",
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey[600]),
+                          onChanged: (val) => setState(() => _imageDecisions[selectedIndex] = val),
+                          items: ['Confirm', 'Reject', 'Uncertain']
+                              .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                              .toList(),
+                        ),
+                      ),
                     ),
                   ],
-                ],
+                ),
               );
             },
           ),
-        const SizedBox(height: 12),
-        Text(
-          'Doctor note:',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : Colors.black,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _noteController,
-          minLines: 2,
-          maxLines: 2,
-          style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black),
-          decoration: InputDecoration(
-            hintText: 'Add notes here...',
-            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
-            filled: true,
-            fillColor: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -894,9 +811,9 @@ class _ResultScreenState extends State<ResultScreen> {
   Future<void> _handleActionLink(String text) async {
     switch (text) {
       case 'Add to Patient Record':
-        final confidence = _topConfidenceForImage(_currentImageIndex);
+        final confidence = _topConfidenceForImage(widget.selectedPredictionIndex);
         final label = _displayLabel(
-          _topPredictionForImage(_currentImageIndex)?['label'] as String?,
+          _topPredictionForImage(widget.selectedPredictionIndex)?['label'] as String?,
         );
         final riskLevel = _getRiskLevel(confidence);
         _appendNoteLine(
@@ -949,6 +866,95 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
+  Future<String?> _showRejectDialog() async {
+    _noteController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _noteController.text.length),
+    );
+
+    final result = await showDialog<String?>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          title: const Text('Confirm Reject'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Do you want to reject this case?'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _noteController,
+                  minLines: 2,
+                  maxLines: 4,
+                  style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black),
+                  decoration: InputDecoration(
+                    labelText: 'Doctor note (optional)',
+                    hintText: 'Add notes here...',
+                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    filled: true,
+                    fillColor: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(_noteController.text),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Reject'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null) return null;
+    return result.trim();
+  }
+
+  Future<bool> _confirmAction(String title, String message) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Confirm'),
+            ),
+          ],
+        );
+      },
+    );
+    return result == true;
+  }
+
   /// Bottom action buttons
   Widget _buildBottomButtons(bool isDark) {
     return Container(
@@ -965,11 +971,13 @@ class _ResultScreenState extends State<ResultScreen> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: () async {
+                    final note = await _showRejectDialog();
+                    if (note == null) return;
                     try {
-                      await CaseService().rejectCase(
+                      await context.read<CaseService>().rejectCase(
                         caseId: widget.caseId,
                         reason: 'User rejected prediction',
-                        notes: _noteWithDecisions(),
+                        notes: _noteWithDecisions(note),
                         predictions: widget.predictions,
                         gender: widget.gender,
                         age: widget.age,
@@ -977,8 +985,8 @@ class _ResultScreenState extends State<ResultScreen> {
                         symptoms: widget.symptoms,
                         imagePaths: widget.imagePaths,
                         imageDecisions: _decisionPayload(),
+                        selectedPredictionIndex: widget.selectedPredictionIndex,
                       );
-                      setState(() => _isRejected = true);
                     } catch (e) {
                       if (mounted) {
                         _showActionSnack("Failed to reject case: $e");
@@ -988,47 +996,19 @@ class _ResultScreenState extends State<ResultScreen> {
                     
                     if (!mounted) return;
 
-                    // Navigate to annotation screen and handle result
-                    final isGp = appState.userRole.toLowerCase() == 'gp';
-                    if (isGp && _isRejected) {
-                      // _showActionSnack("GP cannot annotate rejected cases.");
-                      Navigator.of(context).pop('rejected');
-                      return;
+                    try {
+                      await context.read<CaseService>().isActiveLearningCandidate(
+                        caseId: widget.caseId,
+                      );
+                    } catch (e) {
+                      if (mounted) {
+                        _showActionSnack("AL check failed: $e");
+                      }
                     }
 
-                    final annotationResult = await Navigator.of(context).push<Map<String, dynamic>>(
-                      MaterialPageRoute(
-                        builder: (_) => AnnotateScreen(
-                          caseId: widget.caseId,
-                          imagePaths: widget.imagePaths,
-                          initialIndex: _currentImageIndex,
-                        ),
-                      ),
-                    );
-
-                    if (annotationResult != null && mounted) {
-                      try {
-                        await CaseService().saveAnnotations(
-                          caseId: annotationResult['caseId'] as String,
-                          imageIndex: annotationResult['imageIndex'] as int,
-                          correctLabel: annotationResult['class'] as String,
-                          strokes: (annotationResult['strokes'] as List?)?.cast<Map<String, dynamic>>() ?? [],
-                          boxes: (annotationResult['boxes'] as List?)?.cast<Map<String, dynamic>>() ?? [],
-                        );
-
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Annotations saved successfully')),
-                          );
-                          Navigator.of(context).pop('annotated');
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed to save: $e')),
-                          );
-                        }
-                      }
+                    if (mounted) {
+                      _showActionSnack('Rejected and AL margin calculated');
+                      Navigator.of(context).popUntil((route) => route.isFirst);
                     }
                   },
                   style: OutlinedButton.styleFrom(
@@ -1045,7 +1025,7 @@ class _ResultScreenState extends State<ResultScreen> {
                 child: OutlinedButton(
                   onPressed: () async {
                     try {
-                      await CaseService().logCase(
+                      await context.read<CaseService>().logCase(
                         caseId: widget.caseId,
                         predictions: widget.predictions,
                         status: 'pending',
@@ -1055,7 +1035,7 @@ class _ResultScreenState extends State<ResultScreen> {
                         symptoms: widget.symptoms,
                         imagePaths: widget.imagePaths,
                         imageDecisions: _decisionPayload(),
-                        notes: _noteWithDecisions(),
+                        selectedPredictionIndex: widget.selectedPredictionIndex,
                       );
                     } catch (_) {}
                     if (mounted) Navigator.of(context).pop('pending');
@@ -1073,8 +1053,13 @@ class _ResultScreenState extends State<ResultScreen> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () async {
+                    final ok = await _confirmAction(
+                      'Confirmation',
+                      'Do you want to confirm the prediction',
+                    );
+                    if (!ok) return;
                     try {
-                      await CaseService().logCase(
+                      await context.read<CaseService>().logCase(
                         caseId: widget.caseId,
                         predictions: widget.predictions,
                         status: 'Confirmed',
@@ -1084,7 +1069,7 @@ class _ResultScreenState extends State<ResultScreen> {
                         symptoms: widget.symptoms,
                         imagePaths: widget.imagePaths,
                         imageDecisions: _decisionPayload(),
-                        notes: _noteWithDecisions(),
+                        selectedPredictionIndex: widget.selectedPredictionIndex,
                       );
                     } catch (_) {}
                     if (mounted) Navigator.of(context).pop('Confirmed');

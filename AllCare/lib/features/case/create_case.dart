@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../../theme/glass.dart';
 import '../../theme/glass_inline_dropdown.dart';
@@ -131,10 +132,10 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     });
 
     try {
-      final caseId = await CaseService().fetchNextCaseId();
+      final caseId = await context.read<CaseService>().fetchNextCaseId();
       if (_releaseAfterLoad) {
         try {
-          await CaseService().releaseCaseId(caseId);
+          await context.read<CaseService>().releaseCaseId(caseId);
         } catch (_) {}
         return;
       }
@@ -173,7 +174,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     try {
       _updatedAt = DateTime.now().toIso8601String();
       if (widget.persistChanges) {
-        await CaseService().updateCase(
+        await context.read<CaseService>().updateCase(
           caseId: _caseId!,
           gender: _selectedGender,
           age: _selectedAge,
@@ -227,7 +228,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
 
     _releaseRequested = true;
     try {
-      await CaseService().releaseCaseId(caseId);
+      await context.read<CaseService>().releaseCaseId(caseId);
     } catch (_) {}
   }
 
@@ -605,26 +606,41 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     );
   }
 
-  Widget _buildImagePreviewGrid(bool isDark) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _selectedImagePaths.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1,
-      ),
-      itemBuilder: (context, index) {
-        final path = _selectedImagePaths[index];
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: SizedBox.expand(child: _buildImageThumbnail(path, isDark)),
-        );
-      },
+
+  Widget _buildSingleImage(bool isDark)
+  {
+    final path = _selectedImagePaths.first;
+
+    return Center(child: ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 150,
+        height: 150,
+        child: _buildImageThumbnail(path, isDark)
+      )
+    ),
     );
   }
+  // Widget _buildImagePreviewGrid(bool isDark) {
+  //   return GridView.builder(
+  //     shrinkWrap: true,
+  //     physics: const NeverScrollableScrollPhysics(),
+  //     itemCount: _selectedImagePaths.length,
+  //     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+  //       crossAxisCount: 3,
+  //       crossAxisSpacing: 10,
+  //       mainAxisSpacing: 10,
+  //       childAspectRatio: 1,
+  //     ),
+  //     itemBuilder: (context, index) {
+  //       final path = _selectedImagePaths[index];
+  //       return ClipRRect(
+  //         borderRadius: BorderRadius.circular(10),
+  //         child: SizedBox.expand(child: _buildImageThumbnail(path, isDark)),
+  //       );
+  //     },
+  //   );
+  // }
 
   Widget _buildImageEmptyState(bool isDark) {
     return Container(
@@ -745,7 +761,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          count == 0 ? _buildImageEmptyState(isDark) : _buildImagePreviewGrid(isDark),
+          count == 0 ? _buildImageEmptyState(isDark) : _buildSingleImage(isDark),
         ],
       ),
     );
@@ -912,7 +928,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                         _showConfirmDialog(context); // Will lead to AddPhoto
                     } else {
                         // Case ID not loaded or saving in progress
-                         _showGlassSnackBar('Please wait for Case ID generation...', isError: false);
+                        _showGlassSnackBar('Please wait for Case ID generation...', isError: false);
                     }
                 },
                 style: ElevatedButton.styleFrom(
@@ -1039,7 +1055,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                         }
 
                                         // Open Add Photo Dialog with Blur Stack
-                                        final List<String>? result = await showDialog<List<String>>(
+                                        // AddPhotoDialog returns Map with 'images' and 'predictIndex'
+                                        final Map<String, dynamic>? dialogResult = await showDialog<Map<String, dynamic>>(
                                             context: context,
                                             barrierDismissible: false,
                                             barrierColor:
@@ -1062,6 +1079,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                             },
                                         );
 
+                                        // Extract images list from dialog result
+                                        final List<String>? result = dialogResult?['images']?.cast<String>();
                                         if (result == null || result.isEmpty) return;
                                         if (!context.mounted) return;
 
@@ -1078,34 +1097,42 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                                               selectedSymptoms.add(_customSymptomsController.text.trim());
                                             }
                                         // Navigate to Photo Preview
-                                        final bool? shouldSave = await Navigator.of(context).push<bool>(
+                                        // PhotoPreviewScreen returns a Map with 'confirmed' and 'predictionIndex'
+                                        final dynamic resultData = await Navigator.of(context).push(
                                             MaterialPageRoute(
-                                            builder: (_) => PhotoPreviewScreen(
-                                                imagePath: result.first,
-                                                imagePaths: result,
-                                                caseId: caseId,
-                                                isMultiImage: result.length > 1,
-                                                imageCount: result.length,
-                                            ),
+                                              builder: (_) => PhotoPreviewScreen(
+                                                  imagePath: result.first,
+                                                  imagePaths: result,
+                                                  caseId: caseId,
+                                                  isMultiImage: result.length > 1,
+                                                  imageCount: result.length,
+                                              ),
                                             ),
                                         );
 
-                                        if (shouldSave == true && context.mounted) {
+                                        // Check if user confirmed and extract predictIndex
+                                        if (resultData != null &&
+                                            resultData is Map &&
+                                            resultData['confirmed'] == true &&
+                                            context.mounted) {
+                                            final int predictIndex = resultData['predictionIndex'] ?? 0;
+
                                             await Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                            builder: (_) => CaseSummaryScreen(
-                                                caseId: caseId,
-                                                gender: _selectedGender,
-                                                age: _selectedAge,
-                                                location: _selectedSpecificLocation,
-                                                symptoms: selectedSymptoms,
-                                                imagePaths: result,
-                                                imagePath: result.first,
-                                                createdAt: createdAt,
-                                                updatedAt: updatedAt,
-                                                isPrePrediction: true,
+                                              MaterialPageRoute(
+                                                builder: (_) => CaseSummaryScreen(
+                                                    caseId: caseId,
+                                                    gender: _selectedGender,
+                                                    age: _selectedAge,
+                                                    location: _selectedSpecificLocation,
+                                                    symptoms: selectedSymptoms,
+                                                    imagePaths: result,
+                                                    imagePath: result.first,
+                                                    createdAt: createdAt,
+                                                    updatedAt: updatedAt,
+                                                    isPrePrediction: true,
+                                                    predictIndex: predictIndex,
                                                 ),
-                                            ),
+                                              ),
                                             );
                                         }
                                     },

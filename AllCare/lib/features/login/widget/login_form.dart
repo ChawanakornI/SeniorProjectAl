@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../routes.dart';
@@ -63,6 +64,8 @@ class _LoginFormState extends State<LoginForm> {
     setState(() => _isLoading = true);
 
     try {
+      final appState = context.read<AppState>();
+
       // Authenticate with backend
       final response = await _authService.login(
         usernameController.text,

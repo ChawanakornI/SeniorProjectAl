@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../routes.dart';
+import '../features/case/api_config.dart';
+import '../services/auth_service.dart';
 
 class AdminPage extends StatefulWidget {
   const AdminPage({super.key});
@@ -18,13 +22,28 @@ class _AdminPageState extends State<AdminPage> {
   Map<String, dynamic>? _modelData;
   String? _errorMessage;
   bool _isUploading = false;
+  bool _isDeploying = false;
   String? _fileName;
+
+  // Model History state
+  List<Map<String, dynamic>> _modelHistory = [];
+  bool _isLoadingHistory = false;
+  String? _currentProduction;
+  String? _activeInference;
+
+  // Training Events state
+  List<Map<String, dynamic>> _events = [];
+  bool _isLoadingEvents = false;
+  int _totalLabels = 0;
+  int _unusedLabels = 0;
+  int _retrainThreshold = 10;
+  bool _isRetrain = false;
 
   static const Color cannoliCream = Color(0xFFF5EDDC); // RGB(245, 237, 220)
 
   @override
   Widget build(BuildContext context) {
-    final isDark = appState.isDarkMode;
+    final isDark = context.watch<AppState>().isDarkMode;
     final backgroundColor = isDark
         ? cannoliCream.withValues(alpha: 0.1)
         : cannoliCream;
@@ -95,12 +114,750 @@ class _AdminPageState extends State<AdminPage> {
 
               if (_modelData == null && _errorMessage == null)
                 _buildEmptyState(isDark),
+
+              // Model History Section
+              const SizedBox(height: 32),
+              _buildModelHistorySection(isDark),
+
+              // Training Events Section
+              const SizedBox(height: 32),
+              _buildTrainingEventsSection(isDark),
             ],
           ),
         ),
       ),
     );
   }
+
+  // ===========================================================================
+  // Model History Section
+  // ===========================================================================
+
+  Widget _buildModelHistorySection(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Model History',
+              style: GoogleFonts.syne(fontSize: 20, fontWeight: FontWeight.w600),
+            ),
+            IconButton(
+              onPressed: _isLoadingHistory ? null : _fetchModelHistory,
+              icon: _isLoadingHistory
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_modelHistory.isEmpty && !_isLoadingHistory)
+          _buildEmptyHistoryCard(isDark)
+        else
+          ..._modelHistory.map((model) => _buildModelHistoryCard(model, isDark)),
+      ],
+    );
+  }
+
+  Widget _buildEmptyHistoryCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.history, size: 48, color: Colors.grey.shade500),
+          const SizedBox(height: 12),
+          Text(
+            'No model history yet',
+            style: GoogleFonts.inter(color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _fetchModelHistory,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text('Load History', style: GoogleFonts.inter()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelHistoryCard(Map<String, dynamic> model, bool isDark) {
+    final versionId = model['version_id'] ?? 'Unknown';
+    final status = model['status'] ?? 'unknown';
+    final createdAt = model['created_at'] ?? '';
+    final metrics = model['metrics'] as Map<String, dynamic>? ?? {};
+    final accuracy = metrics['val_accuracy'];
+    final isProduction = status == 'production';
+    final isActiveInference = _activeInference == versionId;
+    final canActivate = status == 'production' || status == 'evaluating';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isProduction ? Colors.green.shade400 : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+          width: isProduction ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  versionId,
+                  style: GoogleFonts.jetBrainsMono(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+              if (isActiveInference) ...[
+                const SizedBox(width: 8),
+                _buildStatusBadge('active'),
+              ],
+              _buildStatusBadge(status),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (accuracy != null) ...[
+                Icon(Icons.analytics, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  'Accuracy: ${(accuracy * 100).toStringAsFixed(1)}%',
+                  style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade600),
+                ),
+                const SizedBox(width: 16),
+              ],
+              Icon(Icons.schedule, size: 16, color: Colors.grey.shade600),
+              const SizedBox(width: 4),
+              Text(
+                _formatDate(createdAt),
+                style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade600),
+              ),
+            ],
+          ),
+          if (!isProduction) ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (canActivate)
+                  TextButton.icon(
+                    onPressed: isActiveInference ? null : () => _activateModel(versionId),
+                    icon: const Icon(Icons.visibility, size: 18),
+                    label: Text(
+                      isActiveInference ? 'Active' : 'Use for Analysis',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                    ),
+                    style: TextButton.styleFrom(foregroundColor: Colors.blue.shade700),
+                  ),
+                if (status == 'archived')
+                  TextButton.icon(
+                    onPressed: () => _promoteModel(versionId),
+                    icon: const Icon(Icons.arrow_upward, size: 18),
+                    label: Text('Promote', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+                    style: TextButton.styleFrom(foregroundColor: Colors.green.shade600),
+                  ),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (canActivate)
+                  TextButton.icon(
+                    onPressed: isActiveInference ? null : () => _activateModel(versionId),
+                    icon: const Icon(Icons.visibility, size: 18),
+                    label: Text(
+                      isActiveInference ? 'Active' : 'Use for Analysis',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                    ),
+                    style: TextButton.styleFrom(foregroundColor: Colors.blue.shade700),
+                  ),
+                TextButton.icon(
+                  onPressed: () => _showRollbackDialog(),
+                  icon: const Icon(Icons.undo, size: 18),
+                  label: Text('Rollback', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+                  style: TextButton.styleFrom(foregroundColor: Colors.orange.shade700),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(String status) {
+    Color bgColor;
+    Color textColor;
+    IconData icon;
+
+    switch (status) {
+      case 'active':
+        bgColor = Colors.blue.shade100;
+        textColor = Colors.blue.shade800;
+        icon = Icons.visibility;
+        break;
+      case 'production':
+        bgColor = Colors.green.shade100;
+        textColor = Colors.green.shade800;
+        icon = Icons.star;
+        break;
+      case 'archived':
+        bgColor = Colors.grey.shade200;
+        textColor = Colors.grey.shade700;
+        icon = Icons.archive;
+        break;
+      case 'training':
+        bgColor = Colors.blue.shade100;
+        textColor = Colors.blue.shade800;
+        icon = Icons.model_training;
+        break;
+      case 'evaluating':
+        bgColor = Colors.amber.shade100;
+        textColor = Colors.amber.shade800;
+        icon = Icons.pending;
+        break;
+      case 'failed':
+        bgColor = Colors.red.shade100;
+        textColor = Colors.red.shade800;
+        icon = Icons.error;
+        break;
+      default:
+        bgColor = Colors.grey.shade200;
+        textColor = Colors.grey.shade700;
+        icon = Icons.help;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: textColor),
+          const SizedBox(width: 4),
+          Text(
+            status.toUpperCase(),
+            style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: textColor),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(String isoDate) {
+    if (isoDate.isEmpty) return '-';
+    try {
+      final dt = DateTime.parse(isoDate);
+      return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return isoDate;
+    }
+  }
+
+  Future<void> _fetchModelHistory() async {
+    setState(() => _isLoadingHistory = true);
+
+    try {
+      final token = await AuthService().getToken();
+      final response = await http.get(
+        ApiConfig.adminModelsUri,
+        headers: ApiConfig.buildHeaders(token: token),
+      );
+
+      if (!mounted) return;
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          setState(() {
+            _modelHistory = List<Map<String, dynamic>>.from(data['models'] ?? []);
+            _currentProduction = data['current_production'];
+            _activeInference = data['active_inference'];
+          });
+        } else {
+        throw Exception('Failed to fetch: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load history: $e', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoadingHistory = false);
+    }
+  }
+
+  Future<void> _promoteModel(String versionId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Promote Model', style: GoogleFonts.syne(fontWeight: FontWeight.w600)),
+        content: Text('Promote $versionId to production?', style: GoogleFonts.inter()),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.inter())),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade600),
+            child: Text('Promote', style: GoogleFonts.inter(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final token = await AuthService().getToken();
+      final response = await http.post(
+        ApiConfig.adminPromoteModelUri(versionId),
+        headers: ApiConfig.buildHeaders(json: true, token: token),
+        body: jsonEncode({'reason': 'Manual promotion from admin panel'}),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Model $versionId promoted!', style: GoogleFonts.inter()),
+            backgroundColor: Colors.green.shade700,
+          ),
+        );
+        _fetchModelHistory();
+      } else {
+        throw Exception('Failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Promotion failed: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red.shade700),
+      );
+    }
+  }
+
+  void _showRollbackDialog() {
+    final archivedModels = _modelHistory.where((m) => m['status'] == 'archived').toList();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Rollback to Previous', style: GoogleFonts.syne(fontWeight: FontWeight.w600)),
+        content: archivedModels.isEmpty
+            ? Text('No archived models available.', style: GoogleFonts.inter())
+            : SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: archivedModels.length,
+                  itemBuilder: (_, i) {
+                    final m = archivedModels[i];
+                    final acc = m['metrics']?['val_accuracy'];
+                    return ListTile(
+                      title: Text(m['version_id'] ?? '', style: GoogleFonts.jetBrainsMono(fontSize: 13)),
+                      subtitle: acc != null ? Text('Accuracy: ${(acc * 100).toStringAsFixed(1)}%', style: GoogleFonts.inter(fontSize: 12)) : null,
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _rollbackToModel(m['version_id']);
+                      },
+                    );
+                  },
+                ),
+              ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.inter())),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _activateModel(String versionId) async {
+    try {
+      final token = await AuthService().getToken();
+      final response = await http.post(
+        ApiConfig.adminActivateModelUri(versionId),
+        headers: ApiConfig.buildHeaders(json: true, token: token),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Active model set to $versionId', style: GoogleFonts.inter()),
+            backgroundColor: Colors.blue.shade700,
+          ),
+        );
+        _fetchModelHistory();
+      } else {
+        throw Exception('Failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Activate failed: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red.shade700),
+      );
+    }
+  }
+
+  Future<void> _rollbackToModel(String versionId) async {
+    try {
+      final token = await AuthService().getToken();
+      final response = await http.post(
+        ApiConfig.adminRollbackModelUri(versionId),
+        headers: ApiConfig.buildHeaders(json: true, token: token),
+        body: jsonEncode({'reason': 'Manual rollback from admin panel'}),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Rolled back to $versionId', style: GoogleFonts.inter()), backgroundColor: Colors.green.shade700),
+        );
+        _fetchModelHistory();
+      } else {
+        throw Exception('Failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Rollback failed: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red.shade700),
+      );
+    }
+  }
+
+  // ===========================================================================
+  // Training Events Section
+  // ===========================================================================
+
+  Widget _buildTrainingEventsSection(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Training Events', style: GoogleFonts.syne(fontSize: 20, fontWeight: FontWeight.w600)),
+            IconButton(
+              onPressed: _isLoadingEvents ? null : _fetchEventsAndLabels,
+              icon: _isLoadingEvents
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Label count card
+        _buildLabelCountCard(isDark),
+        const SizedBox(height: 16),
+
+        // Events list
+        if (_events.isEmpty && !_isLoadingEvents)
+          _buildEmptyEventsCard(isDark)
+        else
+          ..._events.take(10).map((e) => _buildEventCard(e, isDark)),
+      ],
+    );
+  }
+
+  Widget _buildLabelCountCard(bool isDark) {
+    final progress = _retrainThreshold > 0 ? (_unusedLabels / _retrainThreshold).clamp(0.0, 1.0) : 0.0;
+    final ready = _unusedLabels >= _retrainThreshold;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.label, color: Colors.blue.shade600),
+              const SizedBox(width: 8),
+              Text('Label Pool', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+              const Spacer(),
+              if (ready)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(8)),
+                  child: Text('Ready to Train', style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.green.shade800)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildLabelStat('Total', _totalLabels, Colors.blue),
+              _buildLabelStat('Unused', _unusedLabels, Colors.orange),
+              _buildLabelStat('Threshold', _retrainThreshold, Colors.grey),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: Colors.grey.shade300,
+              valueColor: AlwaysStoppedAnimation(ready ? Colors.green.shade500 : Colors.orange.shade400),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$_unusedLabels / $_retrainThreshold labels for next training',
+            style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isRetrain ? null : _triggerRetrain,
+              icon: _isRetrain
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.play_arrow, size: 20),
+              label: Text(_isRetrain ? 'Training...' : 'Trigger Retrain', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ready ? Colors.green.shade600 : Colors.orange.shade600,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey.shade400,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLabelStat(String label, int value, Color color) {
+    return Column(
+      children: [
+        Text('$value', style: GoogleFonts.jetBrainsMono(fontSize: 20, fontWeight: FontWeight.w700, color: color)),
+        Text(label, style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600)),
+      ],
+    );
+  }
+
+  Widget _buildEmptyEventsCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.event_note, size: 48, color: Colors.grey.shade500),
+          const SizedBox(height: 12),
+          Text('No events yet', style: GoogleFonts.inter(color: Colors.grey.shade600)),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _fetchEventsAndLabels,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text('Load Events', style: GoogleFonts.inter()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventCard(Map<String, dynamic> event, bool isDark) {
+    final type = event['type'] ?? '';
+    final message = event['message'] ?? '';
+    final timestamp = event['timestamp'] ?? '';
+
+    IconData icon;
+    Color color;
+    switch (type) {
+      case 'model_promoted':
+        icon = Icons.star;
+        color = Colors.green;
+        break;
+      case 'training_completed':
+        icon = Icons.check_circle;
+        color = Colors.blue;
+        break;
+      case 'training_failed':
+        icon = Icons.error;
+        color = Colors.red;
+        break;
+      case 'retrain_triggered':
+      case 'training_started':
+        icon = Icons.play_circle;
+        color = Colors.orange;
+        break;
+      case 'config_updated':
+        icon = Icons.settings;
+        color = Colors.purple;
+        break;
+      case 'model_rollback':
+        icon = Icons.undo;
+        color = Colors.amber;
+        break;
+      default:
+        icon = Icons.info;
+        color = Colors.grey;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800 : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(message, style: GoogleFonts.inter(fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text(_formatDate(timestamp), style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade500)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _fetchEventsAndLabels() async {
+    setState(() => _isLoadingEvents = true);
+
+    try {
+      final token = await AuthService().getToken();
+
+      // Fetch events and labels in parallel
+      final responses = await Future.wait([
+        http.get(ApiConfig.adminEventsUri, headers: ApiConfig.buildHeaders(token: token)),
+        http.get(ApiConfig.adminLabelsCountUri, headers: ApiConfig.buildHeaders(token: token)),
+      ]);
+
+      if (!mounted) return;
+
+      if (responses[0].statusCode == 200) {
+        final data = jsonDecode(responses[0].body);
+        setState(() => _events = List<Map<String, dynamic>>.from(data['events'] ?? []));
+      }
+
+      if (responses[1].statusCode == 200) {
+        final data = jsonDecode(responses[1].body);
+        setState(() {
+          _totalLabels = data['total_labels'] ?? 0;
+          _unusedLabels = data['unused_labels'] ?? 0;
+          _retrainThreshold = data['retrain_threshold'] ?? 10;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red.shade700),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoadingEvents = false);
+    }
+  }
+
+  Future<void> _triggerRetrain() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Trigger Retraining', style: GoogleFonts.syne(fontWeight: FontWeight.w600)),
+        content: Text(
+          _unusedLabels >= _retrainThreshold
+              ? 'Start training with $_unusedLabels new labels?'
+              : 'Only $_unusedLabels labels available (threshold: $_retrainThreshold). Force retrain anyway?',
+          style: GoogleFonts.inter(),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.inter())),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade600),
+            child: Text('Start', style: GoogleFonts.inter(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isRetrain = true);
+
+    try {
+      final token = await AuthService().getToken();
+      final response = await http.post(
+        ApiConfig.adminRetrainTriggerUri,
+        headers: ApiConfig.buildHeaders(json: true, token: token),
+        body: jsonEncode({'force': _unusedLabels < _retrainThreshold}),
+      );
+
+      if (!mounted) return;
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Training started: ${data['version_id']}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.green.shade700,
+          ),
+        );
+        _fetchEventsAndLabels();
+        _fetchModelHistory();
+      } else {
+        throw Exception(data['error'] ?? data['reason'] ?? 'Failed');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Retrain failed: $e', style: GoogleFonts.inter()), backgroundColor: Colors.red.shade700),
+      );
+    } finally {
+      if (mounted) setState(() => _isRetrain = false);
+    }
+  }
+
   Widget _buildUploadButton(bool isDark) {
     return ElevatedButton.icon(
       onPressed: _isUploading ? null : _pickAndUploadFile,
@@ -476,15 +1233,23 @@ class _AdminPageState extends State<AdminPage> {
         Expanded(
           flex: 2,
           child: ElevatedButton.icon(
-            onPressed: _deployModel,
-            icon: const Icon(Icons.rocket_launch, size: 20),
+            onPressed: _isDeploying ? null : _deployModel,
+            icon: _isDeploying
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.rocket_launch, size: 20),
             label: Text(
-              'Deploy Model',
+              _isDeploying ? 'Deploying...' : 'Deploy Model',
               style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green.shade600,
               foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.green.shade400,
+              disabledForegroundColor: Colors.white70,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -605,7 +1370,7 @@ class _AdminPageState extends State<AdminPage> {
     if (!context.mounted) return;
     if (result == true) {
       // Clear user session data
-      appState.clearUserSession();
+      context.read<AppState>().clearUserSession();
 
       // Navigate to login and remove all previous routes
       Navigator.of(context).pushNamedAndRemoveUntil(
@@ -775,18 +1540,116 @@ class _AdminPageState extends State<AdminPage> {
   
   }
 
-  /// Deploy model (placeholder)
-  void _deployModel() {
-    // TODO: Implement actual deployment logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Model deployment initiated: ${_modelData!['model_name']}',
-          style: GoogleFonts.inter(),
+  /// Deploy model - sends training config to backend
+  Future<void> _deployModel() async {
+    if (_modelData == null) return;
+
+    setState(() => _isDeploying = true);
+
+    try {
+      final trainingDetails = _modelData!['training_details'] as Map<String, dynamic>?;
+      if (trainingDetails == null) {
+        throw Exception('No training_details found in model configuration');
+      }
+
+      // Build config request from training_details
+      final configRequest = <String, dynamic>{};
+      if (trainingDetails['epochs'] != null) configRequest['epochs'] = trainingDetails['epochs'];
+      if (trainingDetails['batch_size'] != null) configRequest['batch_size'] = trainingDetails['batch_size'];
+      if (trainingDetails['learning_rate'] != null) configRequest['learning_rate'] = trainingDetails['learning_rate'];
+      if (trainingDetails['optimizer'] != null) configRequest['optimizer'] = trainingDetails['optimizer'];
+      if (trainingDetails['dropout'] != null) configRequest['dropout'] = trainingDetails['dropout'];
+      if (trainingDetails['augmentation_applied'] != null) configRequest['augmentation_applied'] = trainingDetails['augmentation_applied'];
+
+      final token = await AuthService().getToken();
+      final response = await http.post(
+        ApiConfig.adminTrainingConfigUri,
+        headers: ApiConfig.buildHeaders(json: true, token: token),
+        body: jsonEncode(configRequest),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Training config deployed: ${_modelData!['model_name']}', style: GoogleFonts.inter()),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+        _showDeploymentSuccessDialog(responseData);
+      } else {
+        final errorBody = jsonDecode(response.body);
+        throw Exception(errorBody['detail'] ?? 'Failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Deployment failed: $e', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
-        backgroundColor: Colors.green.shade700,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      );
+    } finally {
+      if (mounted) setState(() => _isDeploying = false);
+    }
+  }
+
+  void _showDeploymentSuccessDialog(Map<String, dynamic> responseData) {
+    final isDark = context.read<AppState>().isDarkMode;
+    final config = responseData['config'] as Map<String, dynamic>?;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? Colors.grey.shade900 : Colors.white,
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green.shade600),
+            const SizedBox(width: 8),
+            Text('Config Deployed', style: GoogleFonts.syne(fontWeight: FontWeight.w600)),
+          ],
+        ),
+        content: config == null
+            ? Text('Configuration updated.', style: GoogleFonts.inter())
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Active training configuration:', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 12),
+                  _configRow('Epochs', config['epochs']),
+                  _configRow('Batch Size', config['batch_size']),
+                  _configRow('Learning Rate', config['learning_rate']),
+                  _configRow('Optimizer', config['optimizer']),
+                  _configRow('Dropout', config['dropout']),
+                  _configRow('Augmentation', config['augmentation_applied']),
+                ],
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('OK', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _configRow(String label, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: GoogleFonts.inter()),
+          Text('${value ?? '-'}', style: GoogleFonts.jetBrainsMono(fontSize: 13)),
+        ],
       ),
     );
   }

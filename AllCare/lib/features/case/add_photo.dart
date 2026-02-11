@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 import 'api_config.dart';
-import 'camera_screen.dart'; // ตรวจสอบว่า import ไฟล์นี้ถูกต้องตามโปรเจกต์คุณ
-
+import 'camera_screen.dart';
+//asdas
 class AddPhotoDialog extends StatefulWidget {
   const AddPhotoDialog({
     super.key,
@@ -27,6 +27,7 @@ class AddPhotoDialog extends StatefulWidget {
 class _AddPhotoDialogState extends State<AddPhotoDialog> {
   final List<String> _selectedImages = [];
   final int _maxImages = 8;
+  int _predictIndex = 0;
   late final List<String> _initialImages;
 
   @override
@@ -242,7 +243,8 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                           : Colors.blue,
                 ),
                 title: Text(
-                  'Take Photo (Smart Camera) (${_maxImages - _selectedImages.length} remaining)',
+                  'Take Photo (Smart Camera) ',
+                  // (${_maxImages - _selectedImages.length} remaining)',
                   style: TextStyle(
                     color:
                         _selectedImages.length >= _maxImages
@@ -271,6 +273,13 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                       await _validateAndAddImage(result);
                     }
                   }
+
+                  //// this is for single image
+                  // if (result != null){
+                  //   if (result is String){
+                  //   await _validateAndAddImage(result);
+                  // }
+                  // }
                 },
               ),
               ListTile(
@@ -285,13 +294,12 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                     limit: _maxImages - _selectedImages.length,
                     imageQuality: 90,
                   );
-                  if (images.isNotEmpty) {
-                    // Process multiple images with blur check
-                    for (final image in images) {
-                      await _validateAndAddImage(image.path);
-                      // Stop if we've reached the limit
-                      if (_selectedImages.length >= _maxImages) break;
-                    }
+
+                  // Process multiple images with blur check
+                  for (final image in images) {
+                    await _validateAndAddImage(image.path);
+                    // Stop if we've reached the limit
+                    if (_selectedImages.length >= _maxImages) break;
                   }
                 },
               ),
@@ -335,7 +343,10 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
       isConfirmAction: true,
       onConfirm: () {
         // ส่ง List รูปภาพกลับไปหน้าหลัก
-        Navigator.of(context).pop(_selectedImages);
+        Navigator.of(context).pop({
+          'images': _selectedImages,
+          'predictIndex': _predictIndex,
+      });
       },
     );
   }
@@ -484,10 +495,10 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
         widget.subtitle ?? 'Upload lesion photos to predict the result';
 
     return Dialog(
-      backgroundColor: Colors.transparent, // สำคัญ
+      backgroundColor: Colors.transparent, 
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        constraints: const BoxConstraints(maxHeight: 600),
+        constraints: const BoxConstraints(maxHeight: 500),
         decoration: BoxDecoration(
           color:
               isDark
@@ -560,9 +571,8 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                   // ---------- Image Area ----------
                   Expanded(
                     child:
-                        _selectedImages.isEmpty
-                            ? _buildEmptyState()
-                            : _buildImageGrid(isDark),
+                        _selectedImages.isEmpty ? _buildEmptyState() : _buildImageGrid(isDark),
+                        // _buildImageGrid(isDark),
                   ),
 
                   const SizedBox(height: 20),
@@ -619,14 +629,25 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
 
             // ---------- Close button ----------
             Positioned(
-              top: 8,
-              right: 8,
-              child: IconButton(
-                icon: Icon(
-                  Icons.close,
-                  color: isDark ? Colors.white70 : Colors.black54,
+              top: 12,
+              right: 12,
+              child: GestureDetector(
+                onTap: _handleCancel,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.black.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.close,
+                    size: 20,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  ),
                 ),
-                onPressed: _handleCancel,
               ),
             ),
           ],
@@ -640,12 +661,12 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
   final isDark = Theme.of(context).brightness == Brightness.dark;
 
   return Align(
-    alignment: Alignment.topLeft,
+    alignment: Alignment.center,
     child: GestureDetector(
       onTap: () => _showImageSourceActionSheet(context),
       child: Container(
-        height: 130,
-        width: 130,
+        height: 200,
+        width: 200,
         decoration: BoxDecoration(
           color: isDark
               ? Color(0xFF282828)
@@ -740,4 +761,40 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
       },
     );
   }
+  // Widget _buildSingleImage(bool isDark) {
+  //   final imagePath = _selectedImages.first;
+
+  //   return Center(
+  //     child: SizedBox(
+  //       width: 200,
+  //       height: 200,
+  //       child: Stack(
+  //         clipBehavior: Clip.none,
+  //         children: [
+  //           ClipRRect(
+  //             borderRadius: BorderRadius.circular(12),
+  //             child: SizedBox.expand(
+  //               child: _buildThumbnail(imagePath, isDark),
+  //             ),
+  //           ),
+  //           Positioned(
+  //             top: -10,
+  //             right: -10,
+  //             child: GestureDetector(
+  //               onTap: () => _removeImage(0),
+  //               child: Container(
+  //                 padding: const EdgeInsets.all(8),
+  //                 decoration: const BoxDecoration(
+  //                   color: Colors.red,
+  //                   shape: BoxShape.circle,
+  //                 ),
+  //                 child: const Icon(Icons.close, size: 15, color: Colors.white),
+  //               ),
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 }

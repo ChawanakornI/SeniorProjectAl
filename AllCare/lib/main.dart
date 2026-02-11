@@ -2,8 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
+import 'package:provider/provider.dart';
 
 import 'app_state.dart';
+import 'features/case/case_service.dart';
+import 'features/case/prediction_service.dart';
+import 'features/case/api_config.dart';
 import 'pages/home_page.dart';
 import 'pages/gp_home_page.dart';
 import 'routes.dart';
@@ -12,9 +16,13 @@ import 'features/case/camera_globals.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Create AppState instance for async initialization
+  final appStateInstance = AppState();
+
   // Load global persisted settings (theme, language, etc.)
   // User-specific data (profile, names) is loaded after login
-  await appState.loadPersistedData();
+  await appStateInstance.loadPersistedData();
+  await ApiConfig.loadFromAssets();
 
   // Camera plugin doesn't support macOS, so handle gracefully
   if (Platform.isMacOS) {
@@ -35,36 +43,29 @@ Future<void> main() async {
     }
   }
 
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: appStateInstance),
+        ProxyProvider<AppState, CaseService>(
+          update: (_, appState, __) => CaseService(appState),
+        ),
+        ProxyProvider<AppState, PredictionService>(
+          update: (_, appState, __) => PredictionService(appState),
+        ),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  @override
-  void initState() {
-    super.initState();
-    appState.addListener(_onAppStateChanged);
-  }
-
-  @override
-  void dispose() {
-    appState.removeListener(_onAppStateChanged);
-    super.dispose();
-  }
-
-  void _onAppStateChanged() {
-    setState(() {});
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isDark = appState.isDarkMode;
+    // context.watch rebuilds this widget when AppState.isDarkMode changes
+    final isDark = context.watch<AppState>().isDarkMode;
 
     return MaterialApp(
       title: 'Alskin',

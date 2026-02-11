@@ -16,32 +16,33 @@ try:
     import torch.nn as nn  # type: ignore
     from torchvision import models  # type: ignore
 
-    # Make inference deterministic/reproducible
-    torch.manual_seed(0)
-    np.random.seed(0)
-    torch.set_num_threads(1)
-    # cuDNN/cuda knobs for determinism
-    try:
-        torch.backends.cudnn.deterministic = True  # type: ignore[attr-defined]
-        torch.backends.cudnn.benchmark = False  # type: ignore[attr-defined]
-    except Exception:
-        pass
-    try:
-        torch.backends.cuda.matmul.allow_tf32 = False  # type: ignore[attr-defined]
-        torch.backends.cudnn.allow_tf32 = False  # type: ignore[attr-defined]
-    except Exception:
-        pass
-    try:
-        torch.set_num_interop_threads(1)
-    except Exception:
-        pass
-    # Full determinism can be opt-in; avoid hard failure on unsupported ops.
-    try:
-        torch.use_deterministic_algorithms(True)
-        print("[model] Deterministic algorithms enabled successfully")
-    except Exception as e:
-        print(f"[model] Warning: Could not enable deterministic algorithms: {e}")
-        print("[model] Falling back to standard algorithms - some operations may be non-deterministic")
+    # # Make inference deterministic/reproducible
+    # torch.manual_seed(0)
+    # np.random.seed(0)
+    # torch.set_num_threads(1)
+    # # cuDNN/cuda knobs for determinism
+    # try:
+    #     torch.backends.cudnn.deterministic = True  # type: ignore[attr-defined]
+    #     torch.backends.cudnn.benchmark = False  # type: ignore[attr-defined]
+    # except Exception:
+    #     pass
+#     try:
+#         torch.backends.cuda.matmul.allow_tf32 = False  # type: ignore[attr-defined]
+#         torch.backends.cudnn.allow_tf32 = False  # type: ignore[attr-defined]
+#     except Exception:
+#         pass
+#     try:
+#         torch.set_num_interop_threads(1)
+#     except Exception:
+#         pass
+#     # Full determinism can be opt-in; avoid hard failure on unsupported ops.
+#     try:
+#         torch.use_deterministic_algorithms(False)
+#         # print("[model] Deterministic algorithms enabled successfully")
+#         print("disable deterministic algo successfully")
+#     except Exception as e:
+#         print(f"[model] Warning: Could not enable deterministic algorithms: {e}")
+#         print("[model] Falling back to standard algorithms - some operations may be non-deterministic")
 except ImportError:
     torch = None
     nn = None
@@ -94,35 +95,34 @@ class ModelService:
             except Exception as exc:
                 print(f"[model] torchscript load failed: {exc}")
 
-        # 2) Try checkpoint with state_dict (ResNet50 with dropout + linear head)
+        # 2) Try checkpoint with state_dict (ResNet50 or EfficientNetV2-M)
         try:
             checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
             state_dict = None
+            architecture = None
             if isinstance(checkpoint, dict):
                 state_dict = checkpoint.get("model_state_dict") or checkpoint.get("state_dict")
+                architecture = checkpoint.get("architecture")
             if state_dict:
-                base_weights = getattr(models, "ResNet50_Weights", None)
-                weights = base_weights.IMAGENET1K_V2 if base_weights else None
-                model = models.resnet50(weights=weights)
-                num_classes = len(self.class_names)
-                in_features = model.fc.in_features
-                # Match training head: Dropout(0.3) + Linear
-                model.fc = nn.Sequential(nn.Dropout(p=0.3), nn.Linear(in_features, num_classes))
+                if architecture is None:
+                    architecture = self._detect_architecture_from_state_dict(state_dict)
+                model = self._create_model(architecture)
                 model.load_state_dict(state_dict)
                 model.to(self.device).eval()
                 
-                # Ensure deterministic behavior
-                if hasattr(model, 'apply'):
-                    model.apply(self._set_deterministic_flags)
+                # # Ensure deterministic behavior
+                # if hasattr(model, 'apply'):
+                #     model.apply(self._set_deterministic_flags)
                 
                 self.model = model
-                print(f"[model] loaded resnet50 checkpoint from {self.model_path}")
+                arch_label = architecture or "unknown"
+                print(f"[model] loaded {arch_label} checkpoint from {self.model_path}")
                 return
             # If the loaded object is already a module, use it directly
             if hasattr(checkpoint, "eval") and callable(getattr(checkpoint, "eval")):
                 checkpoint.to(self.device).eval()
-                if hasattr(checkpoint, 'apply'):
-                    checkpoint.apply(self._set_deterministic_flags)
+                # if hasattr(checkpoint, 'apply'):
+                #     checkpoint.apply(self._set_deterministic_flags)
                 self.model = checkpoint
                 print(f"[model] loaded torch model object from {self.model_path}")
                 return
@@ -131,18 +131,48 @@ class ModelService:
 
         print("[model] unable to load model; running in dummy mode.")
 
-    def _set_deterministic_flags(self, module):
-        """
-        Set flags to ensure deterministic behavior for all modules.
-        This is especially important for dropout layers and other stochastic operations.
-        """
-        if isinstance(module, (nn.Dropout, nn.Dropout2d, nn.Dropout3d)):
-            # Ensure dropout is disabled during inference
-            module.train(False)
+    def _detect_architecture_from_state_dict(self, state_dict) -> str | None:
+        keys = list(state_dict.keys())
+        if any("features.0.0" in k for k in keys):
+            return "efficientnet_v2_m"
+        if any("layer1" in k for k in keys):
+            return "resnet50"
+        return None
+
+    def _create_model(self, architecture: str | None):
+        num_classes = len(self.class_names)
+        arch = (architecture or "resnet50").lower()
+        if arch == "efficientnet_v2_m":
+            model = models.efficientnet_v2_m(weights=None)
+            in_features = model.classifier[1].in_features
+            model.classifier = nn.Sequential(
+                nn.Dropout(p=0.3, inplace=True),
+                nn.Linear(in_features, num_classes),
+            )
+            return model
+        # Default to ResNet50
+        model = models.resnet50(weights=None)
+        in_features = model.fc.in_features
+        model.fc = nn.Sequential(nn.Dropout(p=0.3), nn.Linear(in_features, num_classes))
+        return model
+
+    def set_model_path(self, model_path: str) -> None:
+        self.model_path = model_path
+        self.model = None
+        self._load()
+
+    # def _set_deterministic_flags(self, module):
+    #     """
+    #     Set flags to ensure deterministic behavior for all modules.
+    #     This is especially important for dropout layers and other stochastic operations.
+    #     """
+    #     if isinstance(module, (nn.Dropout, nn.Dropout2d, nn.Dropout3d)):
+    #         # Ensure dropout is disabled during inference
+    #         module.train(False)
         
-        # For other modules, ensure they're in eval mode
-        if hasattr(module, 'train'):
-            module.train(False)
+    #     # For other modules, ensure they're in eval mode
+    #     if hasattr(module, 'train'):
+    #         module.train(False)
 
     def _select_device(self) -> str:
         """

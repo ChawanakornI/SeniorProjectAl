@@ -1,9 +1,9 @@
-
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import '../theme/glass.dart';
@@ -20,19 +20,24 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
+  bool _initialized = false;
 
   @override
-  void initState() {
-    super.initState();
-    // Initialize with default values from AppState
-    _firstNameController.text = appState.firstName;
-    _lastNameController.text = appState.lastName;
-    _firstNameController.addListener(() {
-      appState.setFirstName(_firstNameController.text);
-    });
-    _lastNameController.addListener(() {
-      appState.setLastName(_lastNameController.text);
-    });
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Initialize controllers with AppState values (only once)
+    if (!_initialized) {
+      final appState = context.read<AppState>();
+      _firstNameController.text = appState.firstName;
+      _lastNameController.text = appState.lastName;
+      _firstNameController.addListener(() {
+        context.read<AppState>().setFirstName(_firstNameController.text);
+      });
+      _lastNameController.addListener(() {
+        context.read<AppState>().setLastName(_lastNameController.text);
+      });
+      _initialized = true;
+    }
   }
 
   @override
@@ -43,6 +48,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    final appState = context.read<AppState>();
     try {
       final XFile? image = await _picker.pickImage(
         source: source,
@@ -90,6 +96,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   }
 
   Future<void> _deleteProfileImage() async {
+    final appState = context.read<AppState>();
     try {
       await appState.deleteProfileImage();
       HapticFeedback.lightImpact();
@@ -224,6 +231,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Get AppState via Provider - widget rebuilds when state changes
+    final appState = context.watch<AppState>();
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF050A16) : const Color(0xFFFBFBFB);
     final gradientColors = isDark
@@ -289,12 +299,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                   ],
                 ),
               ),
-              // Content
+              // Content - appState is already watched above so this rebuilds automatically
               Expanded(
-                child: ListenableBuilder(
-                  listenable: appState,
-                  builder: (context, _) {
-                    return SingleChildScrollView(
+                child: SingleChildScrollView(
                       padding: const EdgeInsets.all(20.0),
                       child: Column(
                         children: [
@@ -640,10 +647,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                           ),
                         ),
                       ),
-                        ],
-                      ),
-                    );
-                  },
+                    ],
+                  ),
                 ),
               ),
             ],

@@ -30,9 +30,21 @@
     "role": "gp"
   },
   "user006": {
-    "password_hash": "$2b$12$YmN2oaQh4QZZIgrBpU4Yfu/6XW1/WBDgWTnQqDhn8gYXFLg37GaV.",
+    "password_hash": "$2b$12$paSKGgjguskkB8kMxwSWO.Dl7FHDd4Fw/DgGHQgugIyp0mrN6Mzcm",
     "first_name": "Jake",
     "last_name": "Peralta",
+    "role": "admin"
+  },
+  "user007": {
+    "password_hash": "$2b$12$Vup0uuguNdzmFvCcq1Jncu3HQ3ZpKZrTG2AQNsnAnfM8rDbzyEIhS",
+    "first_name": "ROV",
+    "last_name": "test DC",
+    "role": "doctor"
+  },
+  "user008": {
+    "password_hash": "$2b$12$U06snj1gvrVK0ml/CpKPLua.3ZSlOPhkjKW5hMRkuvbz9dobiOd5y",
+    "first_name": "Admin",
+    "last_name": "Test",
     "role": "admin"
   }
 }

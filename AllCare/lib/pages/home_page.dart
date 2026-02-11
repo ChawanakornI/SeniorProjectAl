@@ -3,10 +3,13 @@ import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import '../theme/glass.dart';
 import '../features/case/create_case.dart';
+import '../widgets/calendar_widget.dart';
+import '../widgets/glass_bottom_nav.dart';
 import 'overviewlabel.dart';
 import '../features/case/case_service.dart';
 import '../features/case/case_summary_screen.dart';
@@ -30,11 +33,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final TextEditingController _searchController = TextEditingController();
-  DateTime _currentWeekStart = _getWeekStart(DateTime.now());
-  DateTime _currentMonth = DateTime.now();
   DateTime? _selectedDate;
   int _currentBottomNavIndex = 0;
-  bool _isMonthView = false;
   bool _showPatientTypeModal = false;
   String _selectedCaseStatus = 'All'; // All, Confirmed, Uncertain, Rejected
   final String _searchQuery = '';
@@ -54,25 +54,23 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // Load cases from backend
+    _loadCases();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     // Determine effective showLabeling: prefer widget arg, fallback to AppState role
     if (widget.showLabeling != null) {
       _shouldShowLabeling = widget.showLabeling!;
     } else {
-      _shouldShowLabeling = appState.userRole.toLowerCase() != 'gp';
+      _shouldShowLabeling = context.read<AppState>().userRole.toLowerCase() != 'gp';
     }
-    appState.addListener(_onAppStateChanged);
-
-    // Start timer to update time every minute
-    // _timeTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-    //   if (mounted) {
-    //     setState(() {
-    //       _currentTime = DateTime.now();
-    //     });
-    //   }
-    // });
-
-    // Load cases from backend
-    _loadCases();
+    // Reload cases when dependencies change (including when returning to this page)
+    if (!_isLoadingCases && _caseRecords.isEmpty) {
+      _loadCases();
+    }
   }
 
   /// Load cases from backend
@@ -85,7 +83,7 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      final cases = await CaseService().fetchCases();
+      final cases = await context.read<CaseService>().fetchCases();
       if (mounted) {
         setState(() {
           _caseRecords = cases;
@@ -106,32 +104,13 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _timeTimer?.cancel();
-    appState.removeListener(_onAppStateChanged);
     _searchController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Reload cases when dependencies change (including when returning to this page)
-    if (!_isLoadingCases && _caseRecords.isEmpty) {
-      _loadCases();
-    }
   }
 
   /// Public method to refresh cases - can be called after returning from other screens
   void refreshCases() {
     _loadCases();
-  }
-
-  void _onAppStateChanged() {
-    if (mounted) {
-      if (widget.showLabeling == null) {
-        _shouldShowLabeling = appState.userRole != 'gp';
-      }
-      setState(() {});
-    }
   }
 
   void _navigateWithFade(Widget page, {bool replace = true}) {
@@ -153,15 +132,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  static DateTime _getWeekStart(DateTime date) {
-    // Get Monday of the week (weekday 1 = Monday)
-    final daysFromMonday = date.weekday - 1;
-    return date.subtract(Duration(days: daysFromMonday));
-  }
-
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
 
   /// Check if a given date has at least one case
   bool _hasCase(DateTime date) {
@@ -169,20 +139,12 @@ class _HomePageState extends State<HomePage> {
       if (record.createdAt == null) return false;
       try {
         final caseDate = DateTime.parse(record.createdAt!);
-        return _isSameDay(caseDate, date);
+        return caseDate.year == date.year &&
+               caseDate.month == date.month &&
+               caseDate.day == date.day;
       } catch (e) {
         return false;
       }
-    });
-  }
-
-  void _jumpToToday() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    setState(() {
-      _selectedDate = today;
-      _currentMonth = DateTime(today.year, today.month, 1);
-      _currentWeekStart = _getWeekStart(today);
     });
   }
 
@@ -194,10 +156,14 @@ class _HomePageState extends State<HomePage> {
           recordStatus.toLowerCase() == 'pending'
               ? 'uncertain'
               : recordStatus.toLowerCase();
+      final isLabeledFilter = _selectedCaseStatus.toLowerCase() == 'labeled';
       final statusMatch =
-          _selectedCaseStatus.toLowerCase() == 'all'
+          isLabeledFilter
               ? true
-              : normalizedStatus == _selectedCaseStatus.toLowerCase();
+              : _selectedCaseStatus.toLowerCase() == 'all'
+                  ? true
+                  : normalizedStatus == _selectedCaseStatus.toLowerCase();
+      final labeledMatch = isLabeledFilter ? record.isLabeled : true;
 
       // Filter by search query (case ID, prediction, or location)
       final caseId = record.caseId;
@@ -227,12 +193,20 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
-      return statusMatch && searchMatch && dateMatch;
+      return statusMatch && labeledMatch && searchMatch && dateMatch;
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Get AppState via Provider - widget rebuilds when state changes
+    final appState = context.watch<AppState>();
+
+    // Update _shouldShowLabeling reactively if widget.showLabeling is null
+    if (widget.showLabeling == null) {
+      _shouldShowLabeling = appState.userRole.toLowerCase() != 'gp';
+    }
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor =
         isDark ? Color.fromARGB(255, 0, 0, 0) : const Color(0xFFFBFBFB);
@@ -255,13 +229,22 @@ class _HomePageState extends State<HomePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Header Section
-                          _buildHeader(isDark),
+                          _buildHeader(isDark, appState),
 
                           // Action Cards Section
                           _buildActionCards(isDark),
 
                           // Calendar Section
-                          _buildCalendarSection(isDark),
+                          CalendarWidget(
+                            selectedDate: _selectedDate,
+                            onDateSelected: (date) {
+                              setState(() {
+                                _selectedDate = date;
+                              });
+                            },
+                            hasIndicatorForDate: _hasCase,
+                            isDark: isDark,
+                          ),
 
                           // Case Record Section
                           _buildCaseRecordSection(isDark),
@@ -273,7 +256,21 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 // Bottom Navigation Bar
-                _buildBottomNavigationBar(isDark),
+                GlassBottomNav(
+                  currentIndex: _currentBottomNavIndex,
+                  onTap: (index) {
+                    if (index == _currentBottomNavIndex) return;
+                    if (index == 3) {
+                      _navigateWithFade(const SettingsPage());
+                    } else if (index == 2) {
+                      _navigateWithFade(const NotificationPage());
+                    } else if (index == 1) {
+                      _navigateWithFade(const DashboardPage());
+                    } else {
+                      setState(() => _currentBottomNavIndex = index);
+                    }
+                  },
+                ),
               ],
             ),
             // Patient Type Selection Modal
@@ -284,7 +281,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildHeader(bool isDark) {
+  Widget _buildHeader(bool isDark, AppState appState) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
       child: Column(
@@ -323,44 +320,40 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
 
-              ListenableBuilder(
-                listenable: appState,
-                builder: (context, _) {
-                  return GestureDetector(
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProfileSettingsPage(),
-                        ),
-                      );
-                    },
-                    child: ClipOval(
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: glassCircle(isDark, highlight: true),
-                          child: appState.profileImageFile != null
-                              ? ClipOval(
-                                  child: Image.file(
-                                    appState.profileImageFile!,
-                                    width: 50,
-                                    height: 50,
-                                    fit: BoxFit.cover,
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.person,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                        ),
-                      ),
+              // Profile avatar - appState is already watched above so this rebuilds automatically
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ProfileSettingsPage(),
                     ),
                   );
                 },
+                child: ClipOval(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: glassCircle(isDark, highlight: true),
+                      child: appState.profileImageFile != null
+                          ? ClipOval(
+                              child: Image.file(
+                                appState.profileImageFile!,
+                                width: 50,
+                                height: 50,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : Icon(
+                              Icons.person,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -614,837 +607,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  String _getMonthName(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return months[month - 1];
-  }
-
-  List<DateTime> _getCurrentWeekDays() {
-    final List<DateTime> days = [];
-    for (int i = 0; i < 7; i++) {
-      days.add(_currentWeekStart.add(Duration(days: i)));
-    }
-    return days;
-  }
-
-  List<DateTime> _getMonthDays() {
-    final firstDayOfMonth = DateTime(
-      _currentMonth.year,
-      _currentMonth.month,
-      1,
-    );
-    final lastDayOfMonth = DateTime(
-      _currentMonth.year,
-      _currentMonth.month + 1,
-      0,
-    );
-
-    // Get the first day of the week (1 = Monday, 7 = Sunday)
-    int firstWeekday = firstDayOfMonth.weekday; // 1 = Monday, 7 = Sunday
-
-    // Calculate offset: Monday=0, Tuesday=1, ..., Sunday=6
-    int offset = firstWeekday - 1; // Monday (1) -> 0, Sunday (7) -> 6
-
-    final List<DateTime> days = [];
-
-    // Add days from previous month if needed
-    if (offset > 0) {
-      final lastDayPreviousMonth =
-          DateTime(_currentMonth.year, _currentMonth.month, 0).day;
-      final previousMonthYear =
-          _currentMonth.month == 1
-              ? _currentMonth.year - 1
-              : _currentMonth.year;
-      final previousMonth =
-          _currentMonth.month == 1 ? 12 : _currentMonth.month - 1;
-
-      for (
-        int i = lastDayPreviousMonth - offset + 1;
-        i <= lastDayPreviousMonth;
-        i++
-      ) {
-        days.add(DateTime(previousMonthYear, previousMonth, i));
-      }
-    }
-
-    // Add days of current month
-    for (int i = 1; i <= lastDayOfMonth.day; i++) {
-      days.add(DateTime(_currentMonth.year, _currentMonth.month, i));
-    }
-
-    // Fill remaining days to complete the week (next month)
-    final remainingDays = 7 - (days.length % 7);
-    if (remainingDays < 7) {
-      final nextMonthYear =
-          _currentMonth.month == 12
-              ? _currentMonth.year + 1
-              : _currentMonth.year;
-      final nextMonth = _currentMonth.month == 12 ? 1 : _currentMonth.month + 1;
-
-      for (int i = 1; i <= remainingDays; i++) {
-        days.add(DateTime(nextMonthYear, nextMonth, i));
-      }
-    }
-
-    return days;
-  }
-
-  String _getWeekRange() {
-    final weekEnd = _currentWeekStart.add(const Duration(days: 6));
-    final startMonth = _getMonthName(_currentWeekStart.month);
-    final endMonth = _getMonthName(weekEnd.month);
-
-    if (_currentWeekStart.month == weekEnd.month) {
-      return '$startMonth ${_currentWeekStart.day} - ${weekEnd.day}, ${_currentWeekStart.year}';
-    } else {
-      return '$startMonth ${_currentWeekStart.day} - $endMonth ${weekEnd.day}, ${_currentWeekStart.year}';
-    }
-  }
-
-  String _getDayAbbreviation(int weekday) {
-    // weekday: 1 = Monday, 7 = Sunday
-    const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-    return days[weekday - 1];
-  }
-
-  bool _canNavigatePrevious() {
-    // Allow navigation to past dates for viewing historical cases
-    // Limit to January 2020 as a reasonable starting point
-    if (_isMonthView) {
-      return _currentMonth.year > 2020 ||
-          (_currentMonth.year == 2020 && _currentMonth.month > 1);
-    } else {
-      final previousWeek = _currentWeekStart.subtract(const Duration(days: 7));
-      return previousWeek.year >= 2020;
-    }
-  }
-
-  bool _canNavigateNext() {
-    // Allow navigation up to 2030 for future appointments
-    if (_isMonthView) {
-      return _currentMonth.year < 2030 ||
-          (_currentMonth.year == 2030 && _currentMonth.month < 12);
-    } else {
-      final nextWeek = _currentWeekStart.add(const Duration(days: 7));
-      return nextWeek.year <= 2030;
-    }
-  }
-
-  Widget _buildCalendarSection(bool isDark) {
-    final today = DateTime.now();
-    isCurrentMonth(date) =>
-        date.year == _currentMonth.year && date.month == _currentMonth.month;
-    final baseTextColor = isDark ? Colors.white : Color(0xFFFBFBFB);
-    final mutedTextColor =
-        isDark ? Colors.white.withValues(alpha: 0.7) : Colors.black.withValues(alpha: 0.6);
-    final accent = isDark ? const Color(0xFF38BDF8) : const Color(0xFFFBFBFB);
-    final selectionFill = isDark ? Color(0xFF282828) : Color(0xFF282828);
-    final selectionBorder = accent.withValues(alpha: isDark ? 0.9 : 0.8);
-    final selectionTextColor = isDark ? Colors.black : Color(0xFFFBFBFB);
-    final todayFill =
-        isDark ? Colors.white.withValues(alpha: 0.18) : Color(0xFFFEFEFE);
-    final todayBorder =
-        isDark ? Colors.white.withValues(alpha: 0.7) : Color(0xFFFEFEFE);
-    final navLabelSize = () {
-      final width = MediaQuery.of(context).size.width;
-      if (width < 360) return 10.0;
-      if (width < 420) return 11.0;
-      return 12.0;
-    }();
-    final isTodaySelected =
-        _selectedDate != null && _isSameDay(_selectedDate!, today);
-
-    return Container(
-      margin: const EdgeInsets.all(20),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(7, 10, 7, 11),
-            decoration: glassCalendar(isDark, radius: 16),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              Icons.chevron_left,
-                              color:
-                                  _canNavigatePrevious()
-                                      ? (isDark
-                                          ? Color(0xFFFBFBFB)
-                                          : Color(0xFFFBFBFB))
-                                      : (isDark
-                                              ? Color.fromARGB(
-                                                255,
-                                                190,
-                                                190,
-                                                190,
-                                              )
-                                              : Color.fromARGB(
-                                                255,
-                                                190,
-                                                190,
-                                                190,
-                                              ))
-                                          .withValues(alpha: 0.3),
-                              size: 30,
-                            ),
-                            onPressed:
-                                _canNavigatePrevious()
-                                    ? () {
-                                      HapticFeedback.selectionClick();
-                                      setState(() {
-                                        if (_isMonthView) {
-                                          if (_currentMonth.month == 1) {
-                                            _currentMonth = DateTime(
-                                              _currentMonth.year - 1,
-                                              12,
-                                            );
-                                          } else {
-                                            _currentMonth = DateTime(
-                                              _currentMonth.year,
-                                              _currentMonth.month - 1,
-                                            );
-                                          }
-                                          // Deselect if selected date is not in the new month
-                                          if (_selectedDate != null) {
-                                            if (_selectedDate!.year !=
-                                                    _currentMonth.year ||
-                                                _selectedDate!.month !=
-                                                    _currentMonth.month) {
-                                              _selectedDate = null;
-                                            }
-                                          }
-                                        } else {
-                                          _currentWeekStart = _currentWeekStart
-                                              .subtract(
-                                                const Duration(days: 7),
-                                              );
-                                          // Deselect if selected date is not in the new week
-                                          if (_selectedDate != null) {
-                                            final weekEnd = _currentWeekStart
-                                                .add(const Duration(days: 6));
-                                            // Normalize dates to compare only year, month, day
-                                            final selectedNormalized = DateTime(
-                                              _selectedDate!.year,
-                                              _selectedDate!.month,
-                                              _selectedDate!.day,
-                                            );
-                                            final weekStartNormalized =
-                                                DateTime(
-                                                  _currentWeekStart.year,
-                                                  _currentWeekStart.month,
-                                                  _currentWeekStart.day,
-                                                );
-                                            final weekEndNormalized = DateTime(
-                                              weekEnd.year,
-                                              weekEnd.month,
-                                              weekEnd.day,
-                                            );
-
-                                            if (selectedNormalized.isBefore(
-                                                  weekStartNormalized,
-                                                ) ||
-                                                selectedNormalized.isAfter(
-                                                  weekEndNormalized,
-                                                )) {
-                                              _selectedDate = null;
-                                            }
-                                          }
-                                        }
-                                      });
-                                    }
-                                    : null,
-                          ),
-                          Expanded(
-                            child: Text(
-                              _isMonthView
-                                  ? '${_getMonthName(_currentMonth.month)} ${_currentMonth.year}'
-                                  : _getWeekRange(),
-                              style: GoogleFonts.inter(
-                                fontSize: navLabelSize,
-                                fontWeight: FontWeight.bold,
-                                color:
-                                    isDark
-                                        ? const Color(0xFFFBFBFB)
-                                        : const Color(0xFFFBFBFB),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              Icons.chevron_right,
-                              color:
-                                  _canNavigateNext()
-                                      ? (isDark
-                                          ? Colors.white
-                                          : Color(0xFFFBFBFB))
-                                      : (isDark ? Colors.white : Colors.black87)
-                                          .withValues(alpha: 0.3),
-                              size: 30,
-                            ),
-                            onPressed:
-                                _canNavigateNext()
-                                    ? () {
-                                      HapticFeedback.selectionClick();
-                                      setState(() {
-                                        if (_isMonthView) {
-                                          if (_currentMonth.month == 12) {
-                                            _currentMonth = DateTime(
-                                              _currentMonth.year + 1,
-                                              1,
-                                            );
-                                          } else {
-                                            _currentMonth = DateTime(
-                                              _currentMonth.year,
-                                              _currentMonth.month + 1,
-                                            );
-                                          }
-                                          // Deselect if selected date is not in the new month
-                                          if (_selectedDate != null) {
-                                            if (_selectedDate!.year !=
-                                                    _currentMonth.year ||
-                                                _selectedDate!.month !=
-                                                    _currentMonth.month) {
-                                              _selectedDate = null;
-                                            }
-                                          }
-                                        } else {
-                                          _currentWeekStart = _currentWeekStart
-                                              .add(const Duration(days: 7));
-                                          // Deselect if selected date is not in the new week
-                                          if (_selectedDate != null) {
-                                            final weekEnd = _currentWeekStart
-                                                .add(const Duration(days: 6));
-                                            // Normalize dates to compare only year, month, day
-                                            final selectedNormalized = DateTime(
-                                              _selectedDate!.year,
-                                              _selectedDate!.month,
-                                              _selectedDate!.day,
-                                            );
-                                            final weekStartNormalized =
-                                                DateTime(
-                                                  _currentWeekStart.year,
-                                                  _currentWeekStart.month,
-                                                  _currentWeekStart.day,
-                                                );
-                                            final weekEndNormalized = DateTime(
-                                              weekEnd.year,
-                                              weekEnd.month,
-                                              weekEnd.day,
-                                            );
-
-                                            if (selectedNormalized.isBefore(
-                                                  weekStartNormalized,
-                                                ) ||
-                                                selectedNormalized.isAfter(
-                                                  weekEndNormalized,
-                                                )) {
-                                              _selectedDate = null;
-                                            }
-                                          }
-                                        }
-                                      });
-                                    }
-                                    : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () {
-                                  HapticFeedback.mediumImpact();
-                                  _jumpToToday();
-                                },
-                                borderRadius: BorderRadius.circular(20),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: glassCoverCalendar(
-                                    isDark,
-                                    radius: 20,
-                                    highlight: isTodaySelected,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.today,
-                                        color:
-                                            isDark
-                                                ? Colors.black87
-                                                : Colors.black87,
-                                        size: 16,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Today',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 11,
-                                          color:
-                                              isDark
-                                                  ? Colors.black87
-                                                  : Colors.black87,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () {
-                                  HapticFeedback.mediumImpact();
-                                  setState(() {
-                                    _isMonthView = !_isMonthView;
-                                    if (_isMonthView) {
-                                      // Sync month view with current week
-                                      // Use the middle of the week to determine which month to show
-                                      final weekMiddle = _currentWeekStart.add(
-                                        const Duration(days: 3),
-                                      );
-                                      _currentMonth = DateTime(
-                                        weekMiddle.year,
-                                        weekMiddle.month,
-                                        1,
-                                      );
-                                      // If there's a selected date, ensure it's in the visible month
-                                      if (_selectedDate != null) {
-                                        final selectedMonth = DateTime(
-                                          _selectedDate!.year,
-                                          _selectedDate!.month,
-                                          1,
-                                        );
-                                        // If selected date is in a different month than week middle, use selected date's month
-                                        if (selectedMonth.month !=
-                                                weekMiddle.month ||
-                                            selectedMonth.year !=
-                                                weekMiddle.year) {
-                                          _currentMonth = selectedMonth;
-                                        }
-                                      }
-                                    } else {
-                                      // Sync week view with selected date or current month
-                                      if (_selectedDate != null) {
-                                        // Use the week containing the selected date
-                                        _currentWeekStart = _getWeekStart(
-                                          _selectedDate!,
-                                        );
-                                      } else {
-                                        // Use today's week, or if today is not in current month, use first day of month's week
-                                        final today = DateTime.now();
-                                        if (today.year == _currentMonth.year &&
-                                            today.month ==
-                                                _currentMonth.month) {
-                                          _currentWeekStart = _getWeekStart(
-                                            today,
-                                          );
-                                        } else {
-                                          final firstDayOfMonth = DateTime(
-                                            _currentMonth.year,
-                                            _currentMonth.month,
-                                            1,
-                                          );
-                                          _currentWeekStart = _getWeekStart(
-                                            firstDayOfMonth,
-                                          );
-                                        }
-                                      }
-                                    }
-                                  });
-                                },
-                                borderRadius: BorderRadius.circular(20),
-                                child: Container(
-                                  margin: EdgeInsets.fromLTRB(0, 0, 5, 0),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 3,
-                                    vertical: 2,
-                                  ),
-                                  decoration: glassCoverCalendar(
-                                    isDark,
-                                    radius: 30,
-                                    highlight: true,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        width: 32,
-                                        height: 32,
-                                        decoration: glassCalendarCircle(
-                                          isDark: isDark,
-                                        ),
-                                        child: Icon(
-                                          Icons.calendar_today,
-                                          color:
-                                              isDark
-                                                  ? Colors.black87
-                                                  : Colors.black87,
-                                          size: 18,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        'Calendar',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 12,
-
-                                          color:
-                                              isDark
-                                                  ? Colors.black87
-                                                  : Colors.black87,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                // Day headers
-                // Row(
-                //   children: List.generate(7, (index) {
-                //     final weekday = index + 1; // 1 = Monday, 7 = Sunday
-                //     return Expanded(
-                //       child: Text(
-                //         _getDayAbbreviation(weekday),
-                //         textAlign: TextAlign.center,
-                //         style: TextStyle(
-                //           fontSize: 11,
-                //           color: mutedTextColor,
-                //           fontWeight: FontWeight.w600,
-                //         ),
-                //       ),
-                //     );
-                //   }),
-                // ),
-                const SizedBox(height: 8),
-                // Calendar days (week or month view)
-                if (_isMonthView)
-                  // Month view - show grid
-                  ...List.generate((_getMonthDays().length / 7).ceil(), (
-                    weekIndex,
-                  ) {
-                    final weekDays =
-                        _getMonthDays().skip(weekIndex * 7).take(7).toList();
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children:
-                            weekDays.map((date) {
-                              final isSelected =
-                                  _selectedDate != null &&
-                                  _selectedDate!.year == date.year &&
-                                  _selectedDate!.month == date.month &&
-                                  _selectedDate!.day == date.day;
-                              final isToday =
-                                  date.year == today.year &&
-                                  date.month == today.month &&
-                                  date.day == today.day;
-                              final isCurrentMonthDay = isCurrentMonth(date);
-                              final hasCase = _hasCase(date);
-
-                              return Expanded(
-                                child: GestureDetector(
-                                  onTap: () {
-                                    HapticFeedback.selectionClick();
-                                    setState(() {
-                                      _selectedDate = date;
-                                      // If in month view and selected date is from different month, update month
-                                      if (_isMonthView &&
-                                          (date.year != _currentMonth.year ||
-                                              date.month !=
-                                                  _currentMonth.month)) {
-                                        _currentMonth = DateTime(
-                                          date.year,
-                                          date.month,
-                                          1,
-                                        );
-                                      }
-                                      // If in week view and selected date is not in current week, update week
-                                      if (!_isMonthView) {
-                                        final selectedWeekStart = _getWeekStart(
-                                          date,
-                                        );
-                                        if (selectedWeekStart !=
-                                            _currentWeekStart) {
-                                          _currentWeekStart = selectedWeekStart;
-                                        }
-                                      }
-                                    });
-                                  },
-                                  child: Center(
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: BackdropFilter(
-                                        filter: ImageFilter.blur(
-                                          sigmaX: 5,
-                                          sigmaY: 5,
-                                        ),
-                                        child: Container(
-                                          width: 36,
-                                          height: 36,
-                                          decoration: BoxDecoration(
-                                            color:
-                                                isSelected
-                                                    ? selectionFill
-                                                    : (isToday
-                                                        ? todayFill
-                                                        : Colors.transparent),
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            border:
-                                                isSelected
-                                                    ? Border.all(
-                                                      color: selectionBorder,
-                                                      width: 1.2,
-                                                    )
-                                                    : (isToday
-                                                        ? Border.all(
-                                                          color: todayBorder,
-                                                          width: 1.2,
-                                                        )
-                                                        : null),
-                                          ),
-                                          child: Stack(
-                                            children: [
-                                              Center(
-                                                child: Text(
-                                                  '${date.day}',
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.bold,
-                                                    color:
-                                                        isSelected
-                                                            ? selectionTextColor
-                                                            : isToday
-                                                            ? const Color(
-                                                              0xFF282828,
-                                                            )
-                                                            : (isCurrentMonthDay
-                                                                ? baseTextColor
-                                                                : mutedTextColor),
-                                                  ),
-                                                ),
-                                              ),
-                                              if (hasCase)
-                                                Positioned(
-                                                  bottom: 2,
-                                                  left: 0,
-                                                  right: 0,
-                                                  child: Center(
-                                                    child: Container(
-                                                      width: 4,
-                                                      height: 4,
-                                                      decoration: BoxDecoration(
-                                                        color: const Color(0xFF22C55E),
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                      ),
-                    );
-                  })
-                else
-                  // Week view - show single row
-                  Row(
-                    children:
-                        _getCurrentWeekDays().map((date) {
-                          final isSelected =
-                              _selectedDate != null &&
-                              _selectedDate!.year == date.year &&
-                              _selectedDate!.month == date.month &&
-                              _selectedDate!.day == date.day;
-
-                          final weekdayLabel = _getDayAbbreviation(
-                            date.weekday,
-                          );
-                          final today = DateTime.now();
-                          final isToday =
-                              date.year == today.year &&
-                              date.month == today.month &&
-                              date.day == today.day;
-                          final hasCase = _hasCase(date);
-
-                          return Expanded(
-                            child: GestureDetector(
-                              onTap: () {
-                                HapticFeedback.selectionClick();
-                                setState(() {
-                                  _selectedDate = date;
-                                  _currentWeekStart = _getWeekStart(date);
-                                });
-                              },
-                              child: Center(
-                                child: Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  width: 48,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        isSelected
-                                            ? Colors.white
-                                            : isToday
-                                            ? (isDark
-                                                ? Color.fromARGB(255, 0, 0, 0)
-                                                : Color.fromARGB(255, 0, 0, 0))
-                                            : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border:
-                                        isSelected
-                                            ? null
-                                            : isToday
-                                            ? Border.all(
-                                              color:
-                                                  isDark
-                                                      ? const Color.fromARGB(
-                                                        255,
-                                                        255,
-                                                        255,
-                                                        255,
-                                                      )
-                                                          .withValues(alpha: 0.7)
-                                                      : const Color.fromARGB(
-                                                        255,
-                                                        255,
-                                                        255,
-                                                        255,
-                                                      ),
-                                              width: 1.4,
-                                            )
-                                            : Border.all(
-                                              color: Colors.white.withValues(alpha: 
-                                                0.9,
-                                              ),
-                                              width: 1.4,
-                                            ),
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        '${date.day}',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                          color:
-                                              isSelected
-                                                  ? const Color(0xFF282828)
-                                                  : isToday
-                                                  ? const Color(0xFFFBFBFB)
-                                                  : Colors.white,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 1),
-                                      Text(
-                                        weekdayLabel,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 8,
-                                          fontWeight: FontWeight.w600,
-                                          color:
-                                              isSelected
-                                                  ? const Color(0xFF282828)
-                                                  : isToday
-                                                  ? const Color(0xFFFBFBFB)
-                                                  : Colors.white.withValues(alpha:
-                                                    0.9,
-                                                  ),
-
-                                          letterSpacing: 0.8,
-                                        ),
-                                      ),
-                                      if (hasCase) ...[
-                                        const SizedBox(height: 2),
-                                        Container(
-                                          width: 4,
-                                          height: 4,
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF22C55E),
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildCaseRecordSection(bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -1558,6 +720,8 @@ class _HomePageState extends State<HomePage> {
                                                     'Confirmed',
                                                     'Uncertain',
                                                     'Rejected',
+                                                    if (_shouldShowLabeling)
+                                                      'Labeled',
                                                   ].map((String value) {
                                                     final isSelected =
                                                         _selectedCaseStatus ==
@@ -1879,6 +1043,7 @@ class _HomePageState extends State<HomePage> {
                   createdAt: record.createdAt,
                   updatedAt: record.updatedAt,
                   isPrePrediction: false, // Already has predictions
+                  predictIndex: record.selectedPredictionIndex ?? 0,
                 ),
           ),
         );
@@ -2052,111 +1217,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildBottomNavigationBar(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: glassCase(isDark, radius: 20, highlight: true),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem('assets/Icons/HomeIcon.svg', 'Home', 0, isDark),
-                _buildNavItem(
-                  'assets/Icons/DashboardIcon.svg',
-                  'Dashboard',
-                  1,
-                  isDark,
-                ),
-                _buildNavItem(
-                  'assets/Icons/NotificationIcon.svg',
-                  'Notification',
-                  2,
-                  isDark,
-                ),
-                _buildNavItem(
-                  'assets/Icons/SettingIcon.svg',
-                  'Setting',
-                  3,
-                  isDark,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(String svgAsset, String label, int index, bool isDark) {
-    final isSelected = _currentBottomNavIndex == index;
-
-    final Color iconColor =
-        isSelected
-            ? (isDark ? const Color(0xFF282828):const Color(0xFFFEFEFE))
-            : (isDark ? Colors.white : Colors.black87);
-
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-
-        if (index == 3) {
-          setState(() => _currentBottomNavIndex = 3);
-          _navigateWithFade(const SettingsPage());
-        } else if (index == 2) {
-          _navigateWithFade(const NotificationPage());
-        } else if (index == 1) {
-          setState(() => _currentBottomNavIndex = 1);
-          _navigateWithFade(const DashboardPage());
-        } else {
-          setState(() => _currentBottomNavIndex = index);
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 23, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected 
-          ?  (isDark ? const Color.fromARGB(255, 173, 173, 173): Color(0xFF282828))
-          : Colors.transparent,
-          borderRadius: BorderRadius.circular(13),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedScale(
-              scale: isSelected ? 1.1 : 1.1,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutBack,
-              child: SvgPicture.asset(
-                svgAsset,
-                width: 24,
-                height: 24,
-                colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
-              ),
-            ),
-            const SizedBox(height: 4),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                height: 1.5,
-                color: iconColor,
-              ),
-              child: Text(label),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget figmaCloseButtonExact({
   required VoidCallback onTap,
   required bool isDark,
@@ -2304,32 +1364,32 @@ class _HomePageState extends State<HomePage> {
                             },
                           ),
 
-                          const SizedBox(height: 18),
-
-                          _buildPatientTypeCard(
-                            icon: Icons.face,
-                            title: 'Acne',
-                            description:
-                                'For assessing acne severity and inflammation.',
-                            isDark: isDark,
-                            onTap: () {
-                              HapticFeedback.mediumImpact();
-                              _navigateWithFade(
-                                const NewCaseScreen(),
-                                replace: false,
-                              );
-                              Future.delayed(
-                                const Duration(milliseconds: 300),
-                                () {
-                                  if (mounted) {
-                                    setState(() {
-                                      _showPatientTypeModal = false;
-                                    });
-                                  }
-                                },
-                              );
-                            },
-                          ),
+                          // const SizedBox(height: 18),
+                          // since we don't use Acne for now
+                          // _buildPatientTypeCard(
+                          //   icon: Icons.face,
+                          //   title: 'Acne',
+                          //   description:
+                          //       'For assessing acne severity and inflammation.',
+                          //   isDark: isDark,
+                          //   onTap: () {
+                          //     HapticFeedback.mediumImpact();
+                          //     _navigateWithFade(
+                          //       const NewCaseScreen(),
+                          //       replace: false,
+                          //     );
+                          //     Future.delayed(
+                          //       const Duration(milliseconds: 300),
+                          //       () {
+                          //         if (mounted) {
+                          //           setState(() {
+                          //             _showPatientTypeModal = false;
+                          //           });
+                          //         }
+                          //       },
+                              // );
+                           // },
+                          // ),
                         ],
                       ),
                     ),

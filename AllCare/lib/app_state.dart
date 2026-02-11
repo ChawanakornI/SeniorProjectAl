@@ -195,5 +195,3 @@ class AppState extends ChangeNotifier {
     return _language == 'English' ? en : th;
   }
 }
-
-final appState = AppState();

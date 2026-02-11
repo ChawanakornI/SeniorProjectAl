@@ -2,10 +2,10 @@ import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../theme/glass.dart';
+import '../widgets/glass_bottom_nav.dart';
 import '../features/case/case_service.dart';
 import '../features/case/case_summary_screen.dart';
 import 'dashboard_page.dart';
@@ -41,7 +41,7 @@ class _NotificationPageState extends State<NotificationPage> {
     });
 
     try {
-      final cases = await CaseService().fetchCases();
+      final cases = await context.read<CaseService>().fetchCases();
       if (mounted) {
         setState(() {
           _cases = cases;
@@ -446,6 +446,10 @@ class _NotificationPageState extends State<NotificationPage> {
                                               createdAt: caseItem.createdAt,
                                               updatedAt: caseItem.updatedAt,
                                               isPrePrediction: false,
+                                              predictIndex:
+                                                  caseItem
+                                                      .selectedPredictionIndex ??
+                                                  0,
                                             ),
                                       ),
                                     );
@@ -627,7 +631,19 @@ class _NotificationPageState extends State<NotificationPage> {
                           ),
                 ),
               ),
-              _buildNotificationBottomNav(isDark),
+              GlassBottomNav(
+                currentIndex: _currentBottomNavIndex,
+                onTap: (index) {
+                  if (index == _currentBottomNavIndex) return;
+                  if (index == 3) {
+                    _navigateTo(const SettingsPage());
+                  } else if (index == 0) {
+                    _navigateTo(const HomePage());
+                  } else if (index == 1) {
+                    _navigateTo(const DashboardPage());
+                  }
+                },
+              ),
             ],
           ),
         ),
@@ -635,94 +651,4 @@ class _NotificationPageState extends State<NotificationPage> {
     );
   }
 
-  Widget _buildNotificationBottomNav(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: glassBox(isDark, radius: 20, highlight: true),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _notificationNavItem('assets/Icons/HomeIcon.svg', 'Home', 0, isDark),
-                _notificationNavItem('assets/Icons/DashboardIcon.svg', 'Dashboard', 1, isDark),
-                _notificationNavItem('assets/Icons/NotificationIcon.svg', 'Notification', 2, isDark),
-                _notificationNavItem('assets/Icons/SettingIcon.svg', 'Setting', 3, isDark),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _notificationNavItem(
-    String svgAsset,
-    String label,
-    int index,
-    bool isDark,
-  ) {
-    final isSelected = _currentBottomNavIndex == index;
-
-    final Color iconColor =
-        isSelected
-            ? (isDark ? const Color(0xFF282828) : const Color(0xFFFEFEFE))
-            : (isDark ? Colors.white : Colors.black87);
-
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        if (index == _currentBottomNavIndex) return;
-        if (index == 3) {
-          _navigateTo(const SettingsPage());
-        } else if (index == 0) {
-          _navigateTo(const HomePage());
-        } else if (index == 1) {
-          _navigateTo(const DashboardPage());
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 23, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark ? const Color.fromARGB(255, 173, 173, 173) : const Color(0xFF282828))
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(13),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedScale(
-              scale: 1.1,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutBack,
-              child: SvgPicture.asset(
-                svgAsset,
-                width: 24,
-                height: 24,
-                colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
-              ),
-            ),
-            const SizedBox(height: 4),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                height: 1.5,
-                color: iconColor,
-              ),
-              child: Text(label),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
