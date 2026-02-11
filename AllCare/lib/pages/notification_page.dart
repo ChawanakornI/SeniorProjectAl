@@ -426,6 +426,11 @@ class _NotificationPageState extends State<NotificationPage> {
                                 child: GestureDetector(
                                   onTap: () {
                                     HapticFeedback.lightImpact();
+                                    final safePredictIndex = caseItem.imagePaths.isEmpty
+                                        ? 0
+                                        : (caseItem.selectedPredictionIndex ?? 0)
+                                            .clamp(0, caseItem.imagePaths.length - 1)
+                                            .toInt();
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -446,10 +451,7 @@ class _NotificationPageState extends State<NotificationPage> {
                                               createdAt: caseItem.createdAt,
                                               updatedAt: caseItem.updatedAt,
                                               isPrePrediction: false,
-                                              predictIndex:
-                                                  caseItem
-                                                      .selectedPredictionIndex ??
-                                                  0,
+                                              predictIndex: safePredictIndex,
                                             ),
                                       ),
                                     );

@@ -73,7 +73,9 @@ class ModelService:
             if not zipfile.is_zipfile(path):
                 return False
             with zipfile.ZipFile(path, "r") as zf:
-                return "constants.pkl" in zf.namelist()
+                # TorchScript archives can store constants under a prefixed folder
+                # (e.g. "archive/constants.pkl"), not only at zip root.
+                return any(name.endswith("constants.pkl") for name in zf.namelist())
         except Exception:
             return False
 
@@ -266,7 +268,3 @@ class ModelService:
             preds.append({"label": self.class_names[i] if i < len(self.class_names) else f"class_{i}", "confidence": float(p)})
         preds = sorted(preds, key=lambda x: x["confidence"], reverse=True)
         return preds
-
-
-# Singleton instance
-model_service = ModelService(conf_threshold=config.CONF_THRESHOLD)

@@ -125,9 +125,13 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
   @override
   void initState() {
     super.initState();
-    // Start carousel at the selected prediction image index
-    _currentImageIndex = widget.predictIndex;
-    _imagePageController = PageController(initialPage: widget.predictIndex);
+    // Start carousel at a safe selected prediction index.
+    final imageCount = _allImagePaths.length;
+    final safeIndex = imageCount == 0
+        ? 0
+        : widget.predictIndex.clamp(0, imageCount - 1).toInt();
+    _currentImageIndex = safeIndex;
+    _imagePageController = PageController(initialPage: safeIndex);
     _fallbackCreatedAt = DateTime.now().toIso8601String();
   }
 

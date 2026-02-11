@@ -1320,6 +1320,11 @@ class _DashboardPageState extends State<DashboardPage>
                     child: GestureDetector(
                       onTap: () {
                         HapticFeedback.lightImpact();
+                        final safePredictIndex = caseRecord.imagePaths.isEmpty
+                            ? 0
+                            : (caseRecord.selectedPredictionIndex ?? 0)
+                                .clamp(0, caseRecord.imagePaths.length - 1)
+                                .toInt();
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -1335,8 +1340,7 @@ class _DashboardPageState extends State<DashboardPage>
                                   createdAt: caseRecord.createdAt,
                                   updatedAt: caseRecord.updatedAt,
                                   isPrePrediction: false,
-                                  predictIndex:
-                                      caseRecord.selectedPredictionIndex ?? 0,
+                                  predictIndex: safePredictIndex,
                                 ),
                           ),
                         );

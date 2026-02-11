@@ -13,6 +13,28 @@ from typing import Dict, List, Optional, Any
 from . import config
 
 
+def _normalize_image_retrain_history(label: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Ensure image retrain history has a stable dict[str, list[str]] shape."""
+    history = label.get(config.AL_IMAGE_RETRAIN_HISTORY_FIELD)
+    if not isinstance(history, dict):
+        history = {}
+
+    normalized: Dict[str, List[str]] = {}
+    for image_path, versions in history.items():
+        if not isinstance(image_path, str):
+            continue
+        if isinstance(versions, list):
+            normalized[image_path] = [str(v) for v in versions if isinstance(v, str)]
+        else:
+            normalized[image_path] = []
+
+    for image_path in label.get("image_paths", []):
+        if isinstance(image_path, str):
+            normalized.setdefault(image_path, [])
+
+    return normalized
+
+
 def _load_all_labels() -> List[Dict[str, Any]]:
     """Load all labels from the pool file."""
     if not os.path.exists(config.AL_LABELS_POOL_FILE):
@@ -84,7 +106,15 @@ def add_label(
         "user_id": user_id,
         "created_at": now if existing_idx is None else labels[existing_idx].get("created_at", now),
         "updated_at": now,
-        "used_in_models": [] if existing_idx is None else labels[existing_idx].get("used_in_models", [])
+        config.AL_LABELS_USED_MODELS_FIELD: (
+            [] if existing_idx is None else labels[existing_idx].get(config.AL_LABELS_USED_MODELS_FIELD, [])
+        ),
+        # Tracks per-image retrain rounds (version IDs) for this labeled case.
+        config.AL_IMAGE_RETRAIN_HISTORY_FIELD: (
+            {p: [] for p in image_paths}
+            if existing_idx is None
+            else _normalize_image_retrain_history(labels[existing_idx])
+        )
     }
 
     if existing_idx is not None:
@@ -116,7 +146,7 @@ def get_unused_labels() -> List[Dict[str, Any]]:
         List of unused label entries
     """
     labels = _load_all_labels()
-    return [l for l in labels if not l.get("used_in_models")]
+    return [l for l in labels if not l.get(config.AL_LABELS_USED_MODELS_FIELD)]
 
 
 def get_labels_since(timestamp: str) -> List[Dict[str, Any]]:
@@ -169,9 +199,18 @@ def mark_labels_used(version_id: str, case_ids: Optional[List[str]] = None) -> i
 
     for label in labels:
         if case_ids is None or label.get("case_id") in case_ids:
-            if version_id not in label.get("used_in_models", []):
-                label.setdefault("used_in_models", []).append(version_id)
+            if version_id not in label.get(config.AL_LABELS_USED_MODELS_FIELD, []):
+                label.setdefault(config.AL_LABELS_USED_MODELS_FIELD, []).append(version_id)
                 marked += 1
+
+            image_history = _normalize_image_retrain_history(label)
+            for image_path in label.get("image_paths", []):
+                if not isinstance(image_path, str):
+                    continue
+                history = image_history.setdefault(image_path, [])
+                if version_id not in history:
+                    history.append(version_id)
+            label[config.AL_IMAGE_RETRAIN_HISTORY_FIELD] = image_history
 
     _save_all_labels(labels)
     return marked

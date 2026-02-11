@@ -111,6 +111,12 @@ class ApiConfig {
   /// Get active inference model
   static Uri get adminActiveInferenceUri => Uri.parse('$baseUrl/admin/models/active');
 
+  /// List models from assets/model directory
+  static Uri get adminAssetModelsUri => Uri.parse('$baseUrl/admin/models/assets');
+
+  /// Activate a model from assets/model for inference
+  static Uri get adminActivateAssetModelUri => Uri.parse('$baseUrl/admin/models/assets/activate');
+
   /// Activate model for inference
   static Uri adminActivateModelUri(String versionId) =>
       Uri.parse('$baseUrl/admin/models/$versionId/activate');
@@ -128,6 +134,9 @@ class ApiConfig {
 
   /// Get retraining status
   static Uri get adminRetrainStatusUri => Uri.parse('$baseUrl/admin/retrain/status');
+
+  /// List supported retrain architectures
+  static Uri get adminRetrainArchitecturesUri => Uri.parse('$baseUrl/admin/retrain/architectures');
 
   /// Get AL events
   static Uri get adminEventsUri => Uri.parse('$baseUrl/admin/events');

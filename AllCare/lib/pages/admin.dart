@@ -30,6 +30,9 @@ class _AdminPageState extends State<AdminPage> {
   bool _isLoadingHistory = false;
   String? _currentProduction;
   String? _activeInference;
+  List<Map<String, dynamic>> _assetModels = [];
+  bool _isLoadingAssetModels = false;
+  String? _activeAssetModelPath;
 
   // Training Events state
   List<Map<String, dynamic>> _events = [];
@@ -38,30 +41,42 @@ class _AdminPageState extends State<AdminPage> {
   int _unusedLabels = 0;
   int _retrainThreshold = 10;
   bool _isRetrain = false;
+  List<Map<String, dynamic>> _retrainArchitectures = [];
+  String? _selectedRetrainArchitecture;
+  bool _isLoadingRetrainArchitectures = false;
 
-  static const Color cannoliCream = Color(0xFFF5EDDC); // RGB(245, 237, 220)
+  static const Color _surfaceLight = Color(0xFFFBFBFB);
+  static const Color _surfaceDark = Color(0xFF000000);
+  static const Color _textLight = Color(0xFF282828);
+  static const Color _primary = Color(0xFF1976D2);
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchModelHistory();
+    _fetchEventsAndLabels();
+    _fetchAssetModels();
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<AppState>().isDarkMode;
-    final backgroundColor = isDark
-        ? cannoliCream.withValues(alpha: 0.1)
-        : cannoliCream;
+    final backgroundColor = isDark ? _surfaceDark : _surfaceLight;
 
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
         title: Text(
           'Admin Panel',
-          style: GoogleFonts.syne(
+          style: GoogleFonts.inter(
             fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : Colors.black87,
+            color: isDark ? Colors.white : _textLight,
           ),
         ),
         backgroundColor: backgroundColor,
         elevation: 0,
         iconTheme: IconThemeData(
-          color: isDark ? Colors.white : Colors.black87,
+          color: isDark ? Colors.white : _textLight,
         ),
         actions: [
           // Logout button
@@ -82,10 +97,10 @@ class _AdminPageState extends State<AdminPage> {
               // Header section
               Text(
                 'Model Management',
-                style: GoogleFonts.syne(
+                style: GoogleFonts.inter(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
+                  color: isDark ? Colors.white : _textLight,
                 ),
               ),
               const SizedBox(height: 8),
@@ -97,6 +112,8 @@ class _AdminPageState extends State<AdminPage> {
                 ),
               ),
               const SizedBox(height: 32),
+              _buildAssetModelSection(isDark),
+              const SizedBox(height: 24),
 
               _buildUploadButton(isDark),
               const SizedBox(height: 24),
@@ -129,6 +146,77 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
+  Widget _buildAssetModelSection(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800 : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Asset Models (assets/model)',
+                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: _isLoadingAssetModels ? null : _fetchAssetModels,
+                icon: _isLoadingAssetModels
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh, size: 20),
+                tooltip: 'Refresh',
+              ),
+            ],
+          ),
+          if (_activeAssetModelPath != null) ...[
+            Text(
+              'Active: $_activeAssetModelPath',
+              style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (_assetModels.isEmpty && !_isLoadingAssetModels)
+            Text(
+              'No model files found in assets/model',
+              style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade600),
+            )
+          else
+            ..._assetModels.map((model) {
+              final fileName = model['file_name']?.toString() ?? '-';
+              final isActive = model['is_active'] == true;
+              final sizeBytes = (model['size_bytes'] as num?)?.toInt() ?? 0;
+              return ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  isActive ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: isActive ? Colors.green.shade600 : Colors.grey.shade500,
+                ),
+                title: Text(fileName, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500)),
+                subtitle: Text(_formatFileSize(sizeBytes), style: GoogleFonts.inter(fontSize: 12)),
+                trailing: TextButton(
+                  onPressed: isActive ? null : () => _activateAssetModel(fileName),
+                  child: Text(
+                    isActive ? 'Active' : 'Use',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
   // ===========================================================================
   // Model History Section
   // ===========================================================================
@@ -142,7 +230,7 @@ class _AdminPageState extends State<AdminPage> {
           children: [
             Text(
               'Model History',
-              style: GoogleFonts.syne(fontSize: 20, fontWeight: FontWeight.w600),
+              style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600),
             ),
             IconButton(
               onPressed: _isLoadingHistory ? null : _fetchModelHistory,
@@ -222,7 +310,7 @@ class _AdminPageState extends State<AdminPage> {
               Expanded(
                 child: Text(
                   versionId,
-                  style: GoogleFonts.jetBrainsMono(fontSize: 14, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
               if (isActiveInference) ...[
@@ -412,11 +500,77 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  Future<void> _fetchAssetModels() async {
+    setState(() => _isLoadingAssetModels = true);
+
+    try {
+      final token = await AuthService().getToken();
+      final response = await http.get(
+        ApiConfig.adminAssetModelsUri,
+        headers: ApiConfig.buildHeaders(token: token),
+      );
+
+      if (!mounted) return;
+      if (response.statusCode != 200) {
+        throw Exception('Failed to fetch asset models: ${response.statusCode}');
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      setState(() {
+        _assetModels = List<Map<String, dynamic>>.from(data['models'] ?? []);
+        _activeAssetModelPath = data['active_model_path']?.toString();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load asset models: $e', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoadingAssetModels = false);
+    }
+  }
+
+  Future<void> _activateAssetModel(String fileName) async {
+    try {
+      final token = await AuthService().getToken();
+      final response = await http.post(
+        ApiConfig.adminActivateAssetModelUri,
+        headers: ApiConfig.buildHeaders(json: true, token: token),
+        body: jsonEncode({'file_name': fileName}),
+      );
+
+      if (!mounted) return;
+      if (response.statusCode != 200) {
+        final error = jsonDecode(response.body);
+        throw Exception(error['detail'] ?? 'Failed: ${response.statusCode}');
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Active model set to $fileName', style: GoogleFonts.inter()),
+          backgroundColor: Colors.green.shade700,
+        ),
+      );
+      _fetchAssetModels();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Activate asset model failed: $e', style: GoogleFonts.inter()),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
   Future<void> _promoteModel(String versionId) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Promote Model', style: GoogleFonts.syne(fontWeight: FontWeight.w600)),
+        title: Text('Promote Model', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         content: Text('Promote $versionId to production?', style: GoogleFonts.inter()),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.inter())),
@@ -466,7 +620,7 @@ class _AdminPageState extends State<AdminPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Rollback to Previous', style: GoogleFonts.syne(fontWeight: FontWeight.w600)),
+        title: Text('Rollback to Previous', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
         content: archivedModels.isEmpty
             ? Text('No archived models available.', style: GoogleFonts.inter())
             : SizedBox(
@@ -478,7 +632,7 @@ class _AdminPageState extends State<AdminPage> {
                     final m = archivedModels[i];
                     final acc = m['metrics']?['val_accuracy'];
                     return ListTile(
-                      title: Text(m['version_id'] ?? '', style: GoogleFonts.jetBrainsMono(fontSize: 13)),
+                      title: Text(m['version_id'] ?? '', style: GoogleFonts.inter(fontSize: 13)),
                       subtitle: acc != null ? Text('Accuracy: ${(acc * 100).toStringAsFixed(1)}%', style: GoogleFonts.inter(fontSize: 12)) : null,
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () {
@@ -563,7 +717,7 @@ class _AdminPageState extends State<AdminPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Training Events', style: GoogleFonts.syne(fontSize: 20, fontWeight: FontWeight.w600)),
+            Text('Training Events', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600)),
             IconButton(
               onPressed: _isLoadingEvents ? null : _fetchEventsAndLabels,
               icon: _isLoadingEvents
@@ -666,7 +820,7 @@ class _AdminPageState extends State<AdminPage> {
   Widget _buildLabelStat(String label, int value, Color color) {
     return Column(
       children: [
-        Text('$value', style: GoogleFonts.jetBrainsMono(fontSize: 20, fontWeight: FontWeight.w700, color: color)),
+        Text('$value', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w700, color: color)),
         Text(label, style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600)),
       ],
     );
@@ -798,29 +952,106 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  Future<void> _fetchRetrainArchitectures() async {
+    if (_isLoadingRetrainArchitectures) return;
+    setState(() => _isLoadingRetrainArchitectures = true);
+
+    try {
+      final token = await AuthService().getToken();
+      final response = await http.get(
+        ApiConfig.adminRetrainArchitecturesUri,
+        headers: ApiConfig.buildHeaders(token: token),
+      );
+
+      if (!mounted) return;
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load architectures: ${response.statusCode}');
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final architectures = List<Map<String, dynamic>>.from(data['architectures'] ?? const []);
+      final defaultArch = data['default_architecture']?.toString();
+      final available = architectures
+          .where((a) => a['available'] == true)
+          .map((a) => a['id']?.toString())
+          .whereType<String>()
+          .toList();
+
+      setState(() {
+        _retrainArchitectures = architectures;
+        if (_selectedRetrainArchitecture != null && available.contains(_selectedRetrainArchitecture)) {
+          return;
+        }
+        _selectedRetrainArchitecture = available.contains(defaultArch) ? defaultArch : (available.isNotEmpty ? available.first : null);
+      });
+    } catch (_) {
+      // Keep previous values if loading architectures fails.
+    } finally {
+      if (mounted) setState(() => _isLoadingRetrainArchitectures = false);
+    }
+  }
+
   Future<void> _triggerRetrain() async {
+    if (_retrainArchitectures.isEmpty) {
+      await _fetchRetrainArchitectures();
+    }
+
+    final availableArchitectures = _retrainArchitectures.where((a) => a['available'] == true).toList();
+    String? dialogSelectedArch = _selectedRetrainArchitecture;
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Trigger Retraining', style: GoogleFonts.syne(fontWeight: FontWeight.w600)),
-        content: Text(
-          _unusedLabels >= _retrainThreshold
-              ? 'Start training with $_unusedLabels new labels?'
-              : 'Only $_unusedLabels labels available (threshold: $_retrainThreshold). Force retrain anyway?',
-          style: GoogleFonts.inter(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+        title: Text('Trigger Retraining', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _unusedLabels >= _retrainThreshold
+                  ? 'Start training with $_unusedLabels new labels?'
+                  : 'Only $_unusedLabels labels available (threshold: $_retrainThreshold). Force retrain anyway?',
+              style: GoogleFonts.inter(),
+            ),
+            const SizedBox(height: 12),
+            Text('Model Architecture', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 8),
+            if (availableArchitectures.isNotEmpty)
+              DropdownButtonFormField<String>(
+                value: dialogSelectedArch,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+                items: availableArchitectures.map((arch) {
+                  final id = arch['id']?.toString() ?? '';
+                  final label = arch['label']?.toString() ?? id;
+                  return DropdownMenuItem(value: id, child: Text(label, style: GoogleFonts.inter()));
+                }).toList(),
+                onChanged: (value) => setDialogState(() => dialogSelectedArch = value),
+              )
+            else
+              Text(
+                'No retrain architecture available',
+                style: GoogleFonts.inter(color: Colors.red.shade700, fontSize: 12),
+              ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: GoogleFonts.inter())),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: availableArchitectures.isEmpty ? null : () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade600),
             child: Text('Start', style: GoogleFonts.inter(color: Colors.white)),
           ),
         ],
-      ),
+      )),
     );
 
     if (confirm != true) return;
+    _selectedRetrainArchitecture = dialogSelectedArch;
 
     setState(() => _isRetrain = true);
 
@@ -829,7 +1060,10 @@ class _AdminPageState extends State<AdminPage> {
       final response = await http.post(
         ApiConfig.adminRetrainTriggerUri,
         headers: ApiConfig.buildHeaders(json: true, token: token),
-        body: jsonEncode({'force': _unusedLabels < _retrainThreshold}),
+        body: jsonEncode({
+          'force': _unusedLabels < _retrainThreshold,
+          if (_selectedRetrainArchitecture != null) 'architecture': _selectedRetrainArchitecture,
+        }),
       );
 
       if (!mounted) return;
@@ -837,9 +1071,15 @@ class _AdminPageState extends State<AdminPage> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        final arch = data['architecture']?.toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Training started: ${data['version_id']}', style: GoogleFonts.inter()),
+            content: Text(
+              arch == null
+                  ? 'Training started: ${data['version_id']}'
+                  : 'Training started: ${data['version_id']} ($arch)',
+              style: GoogleFonts.inter(),
+            ),
             backgroundColor: Colors.green.shade700,
           ),
         );
@@ -879,7 +1119,7 @@ class _AdminPageState extends State<AdminPage> {
         ),
       ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: isDark ? const Color(0xFF2196F3) : const Color(0xFF1976D2),
+        backgroundColor: _primary,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
         shape: RoundedRectangleBorder(
@@ -997,7 +1237,7 @@ class _AdminPageState extends State<AdminPage> {
                         style: GoogleFonts.inter(
                           fontWeight: FontWeight.w600,
                           fontSize: 16,
-                          color: isDark ? Colors.white : Colors.black87,
+                          color: isDark ? Colors.white : _textLight,
                         ),
                       ),
                       if (_fileName != null) ...[
@@ -1078,7 +1318,7 @@ class _AdminPageState extends State<AdminPage> {
           style: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : Colors.black87,
+            color: isDark ? Colors.white : _textLight,
             letterSpacing: 0.5,
           ),
         ),
@@ -1115,7 +1355,7 @@ class _AdminPageState extends State<AdminPage> {
             width: 140,
             child: Text(
               item.label,
-              style: GoogleFonts.jetBrainsMono(
+              style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: isDark ? Colors.white60 : Colors.black54,
@@ -1126,9 +1366,9 @@ class _AdminPageState extends State<AdminPage> {
           Expanded(
             child: Text(
               item.value,
-              style: GoogleFonts.jetBrainsMono(
+              style: GoogleFonts.inter(
                 fontSize: 12,
-                color: isDark ? Colors.white : Colors.black87,
+                color: isDark ? Colors.white : _textLight,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1173,12 +1413,12 @@ class _AdminPageState extends State<AdminPage> {
         style: GoogleFonts.inter(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: isDark ? Colors.white : Colors.black87,
+          color: isDark ? Colors.white : _textLight,
         ),
       ),
       tilePadding: EdgeInsets.zero,
       childrenPadding: const EdgeInsets.only(top: 12),
-      iconColor: isDark ? Colors.white : Colors.black87,
+      iconColor: isDark ? Colors.white : _textLight,
       collapsedIconColor: isDark ? Colors.white60 : Colors.black54,
       children: [
         Container(
@@ -1195,9 +1435,9 @@ class _AdminPageState extends State<AdminPage> {
           ),
           child: SelectableText(
             _formatJson(_modelData!),
-            style: GoogleFonts.jetBrainsMono(
+            style: GoogleFonts.inter(
               fontSize: 11,
-              color: isDark ? Colors.white : Colors.black87,
+              color: isDark ? Colors.white : _textLight,
               height: 1.5,
             ),
           ),
@@ -1315,14 +1555,14 @@ class _AdminPageState extends State<AdminPage> {
             children: [
               Icon(
                 Icons.logout,
-                color: isDark ? Colors.white : Colors.black87,
+                color: isDark ? Colors.white : _textLight,
                 size: 24,
               ),
               const SizedBox(width: 12),
               Text(
                 'Logout',
                 style: GoogleFonts.inter(
-                  color: isDark ? Colors.white : Colors.black87,
+                  color: isDark ? Colors.white : _textLight,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1468,7 +1708,7 @@ class _AdminPageState extends State<AdminPage> {
             const SizedBox(width: 12),
             Text( "Clear Data??",
             style: GoogleFonts.inter(
-              color: isDark ? Colors.white : Colors.black87,
+              color: isDark ? Colors.white : _textLight,
               fontWeight: FontWeight.w700,
             ),
             ),
@@ -1612,7 +1852,7 @@ class _AdminPageState extends State<AdminPage> {
           children: [
             Icon(Icons.check_circle, color: Colors.green.shade600),
             const SizedBox(width: 8),
-            Text('Config Deployed', style: GoogleFonts.syne(fontWeight: FontWeight.w600)),
+            Text('Config Deployed', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ],
         ),
         content: config == null
@@ -1648,10 +1888,22 @@ class _AdminPageState extends State<AdminPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: GoogleFonts.inter()),
-          Text('${value ?? '-'}', style: GoogleFonts.jetBrainsMono(fontSize: 13)),
+          Text('${value ?? '-'}', style: GoogleFonts.inter(fontSize: 13)),
         ],
       ),
     );
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var size = bytes.toDouble();
+    var unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+    return '${size.toStringAsFixed(unitIndex == 0 ? 0 : 1)} ${units[unitIndex]}';
   }
 
   /// Format JSON with indentation
@@ -1676,3 +1928,4 @@ class _DetailItem {
 
   _DetailItem(this.label, this.value);
 }
+

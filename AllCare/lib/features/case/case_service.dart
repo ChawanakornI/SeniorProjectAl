@@ -43,15 +43,28 @@ class CaseRecord {
   });
 
   factory CaseRecord.fromJson(Map<String, dynamic> json) {
+    int? parseOptionalIndex(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) return int.tryParse(value.trim());
+      return null;
+    }
+
     final rawStatus = (json['status'] as String?)?.trim();
     final entryType = (json['entry_type'] as String?)?.toLowerCase().trim() ?? '';
     final correctLabel = json['correct_label'] as String?;
+    final annotationImageIndex = parseOptionalIndex(json['annotation_image_index']);
+    final selectedPredictionIndex =
+        parseOptionalIndex(json['selected_prediction_index']);
     final isLabeled =
         (json['isLabeled'] == true) ||
         (correctLabel != null && correctLabel.trim().isNotEmpty);
 
     String resolvedStatus;
-    if (entryType == 'reject') {
+    if (isLabeled) {
+      resolvedStatus = 'Labeled';
+    } else if (entryType == 'reject') {
       resolvedStatus = 'Rejected';
     } else if (entryType == 'uncertain') {
       resolvedStatus = 'Uncertain';
@@ -86,7 +99,7 @@ class CaseRecord {
       updatedAt: json['updated_at'] as String?,
       isLabeled: isLabeled,
       correctLabel: correctLabel,
-      selectedPredictionIndex: json['selected_prediction_index'] as int?,
+      selectedPredictionIndex: annotationImageIndex ?? selectedPredictionIndex,
     );
   }
 
