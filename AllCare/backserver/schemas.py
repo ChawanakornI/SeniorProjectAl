@@ -201,5 +201,10 @@ class ModelRollbackRequest(BaseModel):
 
 class RetrainTriggerRequest(BaseModel):
     """Request body for manually triggering retraining."""
-    architecture: Optional[str] = None  # Override architecture (efficientnet_v2_m or resnet50)
+    architecture: Optional[str] = None  # Override architecture (e.g., efficientnet_v2_m, resnet50, mobilenet_v3_large, yolo)
     force: bool = False  # Force even if below threshold
+
+
+class AssetModelActivateRequest(BaseModel):
+    """Request body for activating an inference model from assets/model."""
+    file_name: str = Field(..., min_length=1)

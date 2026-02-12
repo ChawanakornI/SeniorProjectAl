@@ -997,6 +997,10 @@ class _HomePageState extends State<HomePage> {
         statusColor = const Color(0xFF10B981); // Emerald green
         statusIcon = Icons.check_circle;
         break;
+      case 'labeled':
+        statusColor = const Color(0xFF2563EB); // Blue
+        statusIcon = Icons.label_important;
+        break;
       case 'rejected':
         statusColor = const Color(0xFFEF4444); // Soft red
         statusIcon = Icons.cancel;
@@ -1028,6 +1032,11 @@ class _HomePageState extends State<HomePage> {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
+        final safePredictIndex = record.imagePaths.isEmpty
+            ? 0
+            : (record.selectedPredictionIndex ?? 0)
+                .clamp(0, record.imagePaths.length - 1)
+                .toInt();
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -1043,7 +1052,7 @@ class _HomePageState extends State<HomePage> {
                   createdAt: record.createdAt,
                   updatedAt: record.updatedAt,
                   isPrePrediction: false, // Already has predictions
-                  predictIndex: record.selectedPredictionIndex ?? 0,
+                  predictIndex: safePredictIndex,
                 ),
           ),
         );

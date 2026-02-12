@@ -186,8 +186,11 @@ class _LabelPageState extends State<LabelPage> {
     final c = view.record;
     final confidence = c.topPredictionConfidence;
     final status = c.status;
+    final statusLower = status.toLowerCase();
     final statusColor =
-        status.toLowerCase() == 'rejected' ? Colors.red : Colors.orange;
+        statusLower == 'labeled'
+            ? Colors.blue
+            : (statusLower == 'rejected' ? Colors.red : Colors.orange);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 18),
@@ -388,6 +391,13 @@ class _LabelPageState extends State<LabelPage> {
     final margin = (raw['margin'] as num?)?.toDouble() ?? 1.0;
     final imagePaths =
         (raw['image_paths'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    final correctLabel = raw['correct_label']?.toString();
+    final isLabeled = correctLabel != null && correctLabel.trim().isNotEmpty;
+    final resolvedStatus = isLabeled
+        ? 'Labeled'
+        : (raw['status']?.toString() ?? 'Uncertain');
+    final annotationImageIndex = raw['annotation_image_index'] as int?;
+    final selectedPredictionIndex = raw['selected_prediction_index'] as int?;
 
     List<Map<String, dynamic>> predictions = [];
     final rawPreds = raw['predictions'];
@@ -409,7 +419,7 @@ class _LabelPageState extends State<LabelPage> {
     final record = CaseRecord(
       caseId: raw['case_id']?.toString() ?? '',
       predictions: predictions,
-      status: raw['status']?.toString() ?? 'Uncertain',
+      status: resolvedStatus,
       entryType: raw['entry_type']?.toString(),
       gender: raw['gender']?.toString(),
       age: raw['age']?.toString(),
@@ -421,9 +431,9 @@ class _LabelPageState extends State<LabelPage> {
       imagePaths: imagePaths,
       createdAt: raw['created_at']?.toString(),
       updatedAt: raw['updated_at']?.toString(),
-      isLabeled: raw['correct_label'] != null,
-      correctLabel: raw['correct_label']?.toString(),
-      selectedPredictionIndex: raw['selected_prediction_index'] as int?,
+      isLabeled: isLabeled,
+      correctLabel: correctLabel,
+      selectedPredictionIndex: annotationImageIndex ?? selectedPredictionIndex,
     );
 
     return _AlCaseView(
@@ -436,12 +446,17 @@ class _LabelPageState extends State<LabelPage> {
   // ========================= ACTION =========================
 
   Future<void> _openAnnotate(CaseRecord c) async {
+    final initialIndex = c.imagePaths.isEmpty
+        ? 0
+        : (c.selectedPredictionIndex ?? 0).clamp(0, c.imagePaths.length - 1);
+
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (_) => AnnotateScreen(
           caseId: c.caseId,
           imagePaths: c.imagePaths,
+          initialIndex: initialIndex,
         ),
       ),
     );

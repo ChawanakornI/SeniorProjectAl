@@ -3,3 +3,6 @@ AllCare/backserver/AL_Back/models/production/model.pt
 AllCare/backserver/AL_Back/models/candidates/old model/ham10000_efficientnetV2m_7class_torchscript.pt
 AllCare/backserver/AL_Back/models/candidates/v20260205_001/model.pt
 AllCare/backserver/AL_Back/models/production/ham10000_efficientnetV2m_7class_torchscript.pt
+AllCare/assets/app_config.json
+/AllCare/assets/Old_Dataset
+AllCare/assets/model/best_skin_model(mobileNetV3(Dataset_pad)).pth

@@ -20,7 +20,16 @@ from . import crypto_utils
 from .model import ModelService
 
 from .AL import get_active_learning_candidates
-from .retrain_model import get_retrain_status, retrain_model, check_retrain_threshold, get_available_training_sample_count
+from .retrain_model import (
+    get_retrain_status,
+    retrain_model,
+    check_retrain_threshold,
+    get_available_training_sample_count,
+    load_training_log,
+    build_training_plot_data,
+    get_available_retrain_architectures,
+    validate_retrain_architecture,
+)
 from . import model_registry
 from . import training_config
 from . import labels_pool
@@ -41,6 +50,7 @@ from .schemas import (
     ModelPromoteRequest,
     ModelRollbackRequest,
     RetrainTriggerRequest,
+    AssetModelActivateRequest,
 )
 app = FastAPI()
 
@@ -698,6 +708,7 @@ async def get_retrain_status_endpoint(user_context: Dict[str, str] = Depends(get
 @app.post("/model/retrain", dependencies=[Depends(require_api_key)])
 async def retrain_model_endpoint(
     background_tasks: BackgroundTasks,
+    architecture: Optional[str] = None,
     user_context: Dict[str, str] = Depends(get_user_context)
 ):
     """
@@ -719,13 +730,18 @@ async def retrain_model_endpoint(
                 "current": available_samples,
             }
 
+        is_valid, normalized_arch, reason = validate_retrain_architecture(architecture)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=reason or f"Invalid architecture: {normalized_arch}")
+
         # Start retraining in background (no hardcoded params; uses config)
-        background_tasks.add_task(retrain_model)
+        background_tasks.add_task(retrain_model, architecture=normalized_arch)
 
         return {
             "status": "retraining_started",
             "message": "Model retraining has been started in the background",
-            "current": available_samples
+            "current": available_samples,
+            "architecture": normalized_arch,
         }
 
     except Exception as e:
@@ -1083,6 +1099,30 @@ async def list_models(
     }
 
 
+@app.get("/admin/models/{version_id}/training-log", dependencies=[Depends(require_api_key)])
+async def get_model_training_log(
+    version_id: str,
+    user_context: Dict[str, str] = Depends(require_admin_role),
+):
+    """Get per-epoch retraining logs for a model version, ready for plotting."""
+    model = model_registry.get_model(version_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    training_log = load_training_log(version_id)
+    if not training_log:
+        raise HTTPException(status_code=404, detail="Training log not found")
+
+    return {
+        "status": "ok",
+        "version_id": version_id,
+        "training_log_file": config.AL_TRAINING_LOG_FILENAME,
+        "total_epochs": len(training_log),
+        "raw_log": training_log,
+        "plot_data": build_training_plot_data(training_log),
+    }
+
+
 @app.get("/admin/models/production", dependencies=[Depends(require_api_key)])
 async def get_production_model(user_context: Dict[str, str] = Depends(require_admin_role)):
     """Get current production model info."""
@@ -1108,6 +1148,77 @@ async def get_active_inference_model(user_context: Dict[str, str] = Depends(requ
     return {
         "status": "ok",
         "active_inference": active
+    }
+
+
+def _is_supported_asset_model_file(path: Path) -> bool:
+    name = path.name.lower()
+    for ext in (config.MODEL_FILE_EXTENSIONS or []):
+        if name.endswith(ext):
+            return True
+    return False
+
+
+def _list_asset_models() -> List[Dict[str, Any]]:
+    assets_dir = Path(config.MODEL_ASSETS_DIR)
+    if not assets_dir.exists():
+        return []
+
+    active_path = Path(model_service.model_path).resolve() if model_service.model_path else None
+    rows: List[Dict[str, Any]] = []
+    for path in assets_dir.iterdir():
+        if not path.is_file() or not _is_supported_asset_model_file(path):
+            continue
+        resolved = path.resolve()
+        rows.append(
+            {
+                "file_name": path.name,
+                "path": str(path),
+                "size_bytes": path.stat().st_size,
+                "modified_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
+                "is_active": bool(active_path and resolved == active_path),
+            }
+        )
+
+    rows.sort(key=lambda m: (0 if "torchscript" in m["file_name"].lower() else 1, m["file_name"].lower()))
+    return rows
+
+
+@app.get("/admin/models/assets", dependencies=[Depends(require_api_key)])
+async def list_asset_models(user_context: Dict[str, str] = Depends(require_admin_role)):
+    """List local inference models under assets/model directory."""
+    models = _list_asset_models()
+    return {
+        "status": "ok",
+        "assets_dir": str(config.MODEL_ASSETS_DIR),
+        "active_model_path": model_service.model_path,
+        "models": models,
+        "total": len(models),
+    }
+
+
+@app.post("/admin/models/assets/activate", dependencies=[Depends(require_api_key)])
+async def activate_asset_model(
+    payload: AssetModelActivateRequest,
+    user_context: Dict[str, str] = Depends(require_admin_role),
+):
+    """Activate an inference model from assets/model by file name."""
+    safe_name = Path(payload.file_name).name
+    if safe_name != payload.file_name:
+        raise HTTPException(status_code=400, detail="Invalid model file_name")
+
+    model_path = Path(config.MODEL_ASSETS_DIR) / safe_name
+    if not model_path.exists() or not model_path.is_file():
+        raise HTTPException(status_code=404, detail="Model file not found")
+    if not _is_supported_asset_model_file(model_path):
+        raise HTTPException(status_code=400, detail="Unsupported model extension")
+
+    model_service.set_model_path(str(model_path))
+    return {
+        "status": "ok",
+        "message": f"Active inference model set to {safe_name}",
+        "active_model_path": str(model_path),
+        "model_loaded": model_service.model is not None,
     }
 
 
@@ -1185,6 +1296,10 @@ async def trigger_retrain(
     user_context: Dict[str, str] = Depends(require_admin_role)
 ):
     """Manually trigger model retraining."""
+    is_valid, normalized_arch, reason = validate_retrain_architecture(payload.architecture)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=reason or f"Invalid architecture: {normalized_arch}")
+
     # Check threshold unless forced
     if not payload.force:
         should_retrain, current, threshold = check_retrain_threshold()
@@ -1198,7 +1313,7 @@ async def trigger_retrain(
             }
 
     # Start retraining (this is synchronous for now - consider background task for production)
-    result = retrain_model(architecture=payload.architecture)
+    result = retrain_model(architecture=normalized_arch)
 
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Retraining failed"))
@@ -1214,6 +1329,7 @@ async def trigger_retrain(
     return {
         "status": "ok",
         "message": "Retraining completed",
+        "architecture": normalized_arch,
         **result
     }
 
@@ -1232,6 +1348,17 @@ async def get_retrain_status_endpoint(user_context: Dict[str, str] = Depends(req
             "current_labels": threshold_info[1],
             "required": threshold_info[2]
         }
+    }
+
+
+@app.get("/admin/retrain/architectures", dependencies=[Depends(require_api_key)])
+async def get_retrain_architectures(user_context: Dict[str, str] = Depends(require_admin_role)):
+    """List retrain architecture options for frontend selection."""
+    options = get_available_retrain_architectures()
+    return {
+        "status": "ok",
+        "default_architecture": config.AL_DEFAULT_ARCHITECTURE,
+        "architectures": options,
     }
 
 
@@ -1293,9 +1420,25 @@ async def get_labels(
 model_service = ModelService(conf_threshold=config.CONF_THRESHOLD)
 active_inference = model_registry.get_active_inference_model()
 if active_inference:
-    active_path = active_inference.get("active_path") or active_inference.get("path")
-    if active_path:
-        model_service.set_model_path(active_path)
+    candidate_paths = [
+        active_inference.get("active_path"),
+        active_inference.get("production_path"),
+        active_inference.get("path"),
+    ]
+    chosen_path = next((p for p in candidate_paths if p and os.path.isfile(p)), None)
+    if chosen_path:
+        model_service.set_model_path(chosen_path)
+        configured_active = active_inference.get("active_path")
+        if configured_active and configured_active != chosen_path:
+            print(
+                f"[model] active inference path missing; fell back to available path: {chosen_path}"
+            )
+    else:
+        configured_active = active_inference.get("active_path") or active_inference.get("path")
+        if configured_active:
+            print(
+                f"[model] active inference path not found, keeping current model: {configured_active}"
+            )
 
 if __name__ == "__main__":
     import uvicorn

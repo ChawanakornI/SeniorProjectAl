@@ -236,6 +236,21 @@ class TestLabelsPool:
         assert len(unused) == 1
         assert unused[0]["case_id"] == "case_002"
 
+    def test_track_image_retrain_rounds(self, temp_al_workspace):
+        """Should track retrain rounds per image path."""
+        labels_pool.add_label("case_001", ["/img1.jpg", "/img2.jpg"], "mel", "user1")
+
+        labels_pool.mark_labels_used("v_001", ["case_001"])
+        labels_pool.mark_labels_used("v_002", ["case_001"])
+        labels_pool.mark_labels_used("v_002", ["case_001"])  # no duplicates
+
+        label = labels_pool.get_label_by_case("case_001")
+        assert label is not None
+
+        image_history = label.get(config.AL_IMAGE_RETRAIN_HISTORY_FIELD, {})
+        assert image_history["/img1.jpg"] == ["v_001", "v_002"]
+        assert image_history["/img2.jpg"] == ["v_001", "v_002"]
+
 
 class TestEventLog:
     """Tests for event_log module."""

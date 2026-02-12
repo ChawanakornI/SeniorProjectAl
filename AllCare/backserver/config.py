@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 from typing import List
 
@@ -11,11 +12,48 @@ def _get_env_list(key: str, default: str = "") -> List[str]:
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "assets" / "model" / "ham10000_efficientnetV2m_7class_torchscript.pt"
+MODEL_ASSETS_DIR = Path(os.getenv("MODEL_ASSETS_DIR", str(PROJECT_ROOT / "assets" / "model")))
+_default_model_extensions = ".pt,.pth,.jit,.pth.tar"
+MODEL_FILE_EXTENSIONS: List[str] = [
+    ext.strip().lower()
+    for ext in os.getenv("MODEL_FILE_EXTENSIONS", _default_model_extensions).split(",")
+    if ext.strip()
+]
+
+
+def _is_supported_model_file(path: Path) -> bool:
+    name = path.name.lower()
+    for ext in MODEL_FILE_EXTENSIONS:
+        if name.endswith(ext):
+            return True
+    return False
+
+
+def _discover_default_model_path() -> str:
+    # 1) Explicit env always wins.
+    env_path = os.getenv("MODEL_PATH", "").strip()
+    if env_path:
+        return env_path
+
+    # 2) Otherwise discover from assets/model (no hardcoded filename).
+    if MODEL_ASSETS_DIR.exists():
+        candidates = [
+            p for p in MODEL_ASSETS_DIR.iterdir()
+            if p.is_file() and _is_supported_model_file(p)
+        ]
+        if candidates:
+            # Prefer TorchScript-like filenames for inference compatibility.
+            candidates.sort(
+                key=lambda p: (0 if "torchscript" in p.name.lower() else 1, p.name.lower())
+            )
+            return str(candidates[0])
+
+    # 3) Fallback to empty (ModelService will run dummy mode if not set/found).
+    return ""
 
 BACKSERVER_HOST: str = os.getenv("BACKSERVER_HOST", "0.0.0.0")
 BACKSERVER_PORT: int = int(os.getenv("BACKSERVER_PORT", "8000"))
-MODEL_PATH: str = os.getenv("MODEL_PATH", str(DEFAULT_MODEL_PATH))
+MODEL_PATH: str = _discover_default_model_path()
 # Optional override to force device selection (cpu|cuda|mps)
 MODEL_DEVICE: str = os.getenv("MODEL_DEVICE", "").strip().lower()
 BLUR_THRESHOLD: float = float(os.getenv("BLUR_THRESHOLD", "50.0"))
@@ -63,6 +101,37 @@ AL_MODEL_REGISTRY_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "db", "model_regis
 AL_LABELS_POOL_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "db", "labels_pool.jsonl")
 AL_EVENT_LOG_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "db", "event_log.jsonl")
 AL_ACTIVE_CONFIG_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "config", "active_config.json")
+AL_LABELS_USED_MODELS_FIELD: str = os.getenv("AL_LABELS_USED_MODELS_FIELD", "used_in_models")
+AL_IMAGE_RETRAIN_HISTORY_FIELD: str = os.getenv("AL_IMAGE_RETRAIN_HISTORY_FIELD", "image_retrain_history")
+AL_TRAINING_LOG_FILENAME: str = os.getenv("AL_TRAINING_LOG_FILENAME", "training_log.json")
+
+# Experience Replay configuration (old data + new labeled data)
+AL_EXPERIENCE_REPLAY_ENABLED: bool = os.getenv("AL_EXPERIENCE_REPLAY_ENABLED", "true").strip().lower() in ("1", "true", "yes")
+AL_OLD_DATASET_DIR: str = os.getenv("AL_OLD_DATASET_DIR", str(PROJECT_ROOT / "assets" / "Old_Dataset"))
+AL_OLD_DATA_CSV: str = os.getenv("AL_OLD_DATA_CSV", str(PROJECT_ROOT / "assets" / "Old data.csv"))
+AL_OLD_DATA_CSV_IMAGE_COLUMN: str = os.getenv("AL_OLD_DATA_CSV_IMAGE_COLUMN", "img_id").strip()
+AL_OLD_DATA_CSV_LABEL_COLUMN: str = os.getenv("AL_OLD_DATA_CSV_LABEL_COLUMN", "diagnostic").strip()
+AL_REPLAY_OLD_QUOTA: int = int(os.getenv("AL_REPLAY_OLD_QUOTA", "1000"))
+AL_REPLAY_HERDING_RATIO: float = float(os.getenv("AL_REPLAY_HERDING_RATIO", "0.8"))
+AL_REPLAY_RANDOM_RATIO: float = float(os.getenv("AL_REPLAY_RANDOM_RATIO", "0.2"))
+AL_REPLAY_RANDOM_SEED: int = int(os.getenv("AL_REPLAY_RANDOM_SEED", "42"))
+AL_REPLAY_IMAGE_SIZE: int = int(os.getenv("AL_REPLAY_IMAGE_SIZE", "224"))
+AL_REPLAY_BATCH_SIZE: int = int(os.getenv("AL_REPLAY_BATCH_SIZE", "32"))
+_default_old_label_map = {
+    "ACK": "akiec",
+    "SCC": "akiec",
+    "BCC": "bcc",
+    "SEK": "bkl",
+    "BKL": "bkl",
+    "MEL": "mel",
+    "NEV": "nv",
+    "NV": "nv",
+    "VASC": "vasc",
+    "DF": "df",
+}
+AL_OLD_DATA_LABEL_MAP: dict = json.loads(os.getenv("AL_OLD_DATA_LABEL_MAP", json.dumps(_default_old_label_map)))
+AL_SPLIT_SEED: int = int(os.getenv("AL_SPLIT_SEED", "42"))
+AL_SPLIT_TRAIN_RATIO: float = float(os.getenv("AL_SPLIT_TRAIN_RATIO", "0.8"))
 
 # Active Learning candidate selection defaults
 AL_CANDIDATES_TOP_K: int = int(os.getenv("AL_CANDIDATES_TOP_K", "5")) #เลือกtop k ว่าแสดงกี่caseดี
@@ -82,6 +151,8 @@ REVERSE_LABEL_MAP: dict = {v: k for k, v in LABEL_MAP.items()}
 class ModelArchitecture:
     EFFICIENTNET_V2_M = "efficientnet_v2_m"
     RESNET50 = "resnet50"
+    MOBILENET_V3_LARGE = "mobilenet_v3_large"
+    YOLO = "yolo"
 
 # Default architecture for new AL training
 AL_DEFAULT_ARCHITECTURE: str = os.getenv("AL_DEFAULT_ARCHITECTURE", ModelArchitecture.EFFICIENTNET_V2_M)
@@ -90,4 +161,17 @@ AL_DEFAULT_ARCHITECTURE: str = os.getenv("AL_DEFAULT_ARCHITECTURE", ModelArchite
 AL_BASE_MODELS: dict = {
     ModelArchitecture.EFFICIENTNET_V2_M: str(PROJECT_ROOT / "assets" / "models" / "ham10000_efficientNetV2m_7Class.pt"),
     ModelArchitecture.RESNET50: str(PROJECT_ROOT / "assets" / "models" / "ham10000_resnet50_7Class.pt"),
+    ModelArchitecture.MOBILENET_V3_LARGE: str(PROJECT_ROOT / "assets" / "models" / "best_skin_model(mobileNetV3(Dataset_pad)).pth"),
+    ModelArchitecture.YOLO: str(PROJECT_ROOT / "assets" / "models" / "ham10000_yolo_7Class.pt"),
 }
+
+# YOLO retraining configuration
+AL_YOLO_ENABLED: bool = os.getenv("AL_YOLO_ENABLED", "true").strip().lower() in ("1", "true", "yes")
+AL_YOLO_TASK: str = os.getenv("AL_YOLO_TASK", "classify").strip().lower()
+AL_YOLO_PRETRAINED_WEIGHTS: str = os.getenv("AL_YOLO_PRETRAINED_WEIGHTS", "yolo11n-cls.pt").strip()
+AL_YOLO_IMG_SIZE: int = int(os.getenv("AL_YOLO_IMG_SIZE", "224"))
+AL_YOLO_PATIENCE: int = int(os.getenv("AL_YOLO_PATIENCE", "20"))
+AL_YOLO_WORKERS: int = int(os.getenv("AL_YOLO_WORKERS", "0"))
+AL_YOLO_DATASET_DIRNAME: str = os.getenv("AL_YOLO_DATASET_DIRNAME", "yolo_dataset").strip()
+AL_YOLO_RUN_NAME: str = os.getenv("AL_YOLO_RUN_NAME", "yolo_train").strip()
+AL_YOLO_SAVE_PERIOD: int = int(os.getenv("AL_YOLO_SAVE_PERIOD", "1"))
