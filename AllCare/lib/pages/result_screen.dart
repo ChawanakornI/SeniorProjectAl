@@ -144,7 +144,8 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   double _topConfidenceForImage(int index) {
-    return ((_topPredictionForImage(index)?['confidence'] as num?)?.toDouble() ??
+    return ((_topPredictionForImage(index)?['confidence'] as num?)
+            ?.toDouble() ??
         0.0);
   }
 
@@ -165,7 +166,9 @@ class _ResultScreenState extends State<ResultScreen> {
     final decisions = _decisionPayload();
     if (decisions.isEmpty) return noteValue;
 
-    final decisionText = decisions.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+    final decisionText = decisions.entries
+        .map((e) => '${e.key}: ${e.value}')
+        .join(', ');
     if (noteValue == null) return 'Decisions: $decisionText';
     return '$noteValue\nDecisions: $decisionText';
   }
@@ -191,7 +194,12 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   /// Build image widget that handles both local files and network URLs
-  Widget _buildCaseImage(String path, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+  Widget _buildCaseImage(
+    String path, {
+    double? width,
+    double? height,
+    BoxFit fit = BoxFit.cover,
+  }) {
     final resolvedPath = _resolveImagePath(path);
     if (resolvedPath.isEmpty) return _imagePlaceholder(width, height);
 
@@ -207,7 +215,9 @@ class _ResultScreenState extends State<ResultScreen> {
           return SizedBox(
             width: width,
             height: height,
-            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            child: const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           );
         },
       );
@@ -246,17 +256,10 @@ class _ResultScreenState extends State<ResultScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final gradientColors = isDark
-        ? const [
-            Color(0xFF050A16),
-            Color(0xFF0B1224),
-            Color(0xFF0F1E33),
-          ]
-        : const [
-            Color(0xFFFBFBFB),
-            Color(0xFFF5F5F5),
-            Color(0xFFFFFFFF),
-          ];
+    final gradientColors =
+        isDark
+            ? const [Color(0xFF050A16), Color(0xFF0B1224), Color(0xFF0F1E33)]
+            : const [Color(0xFFFBFBFB), Color(0xFFF5F5F5), Color(0xFFFFFFFF)];
 
     // Use the selected prediction index instead of current carousel index
     final selectedIndex = widget.selectedPredictionIndex;
@@ -267,13 +270,18 @@ class _ResultScreenState extends State<ResultScreen> {
     final currentPredictions = _predictionsForImage(selectedIndex);
 
     final scheme =
-        _isCancerLikeLabel(rawTopLabel) ? GradientScheme.red : GradientScheme.blue;
+        _isCancerLikeLabel(rawTopLabel)
+            ? GradientScheme.red
+            : GradientScheme.blue;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.black),
+          icon: Icon(
+            Icons.arrow_back,
+            color: isDark ? Colors.white : Colors.black,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -291,7 +299,9 @@ class _ResultScreenState extends State<ResultScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
-              color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.5),
+              color: (isDark ? Colors.black : Colors.white).withValues(
+                alpha: 0.5,
+              ),
             ),
           ),
         ),
@@ -378,7 +388,10 @@ class _ResultScreenState extends State<ResultScreen> {
           Text(
             'SUSPECTED: ${label.toUpperCase()}',
             style: TextStyle(
-              color: scheme == GradientScheme.blue ? const Color(0xFF9DD6FF) : Colors.red,
+              color:
+                  scheme == GradientScheme.blue
+                      ? const Color(0xFF9DD6FF)
+                      : Colors.red,
               fontWeight: FontWeight.bold,
               fontSize: 14,
             ),
@@ -395,7 +408,11 @@ class _ResultScreenState extends State<ResultScreen> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: _getRiskColor(riskLevel), size: 18),
+              Icon(
+                Icons.warning_amber_rounded,
+                color: _getRiskColor(riskLevel),
+                size: 18,
+              ),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -412,7 +429,10 @@ class _ResultScreenState extends State<ResultScreen> {
               GestureDetector(
                 onTap: () => setState(() => _showDetails = !_showDetails),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -420,11 +440,19 @@ class _ResultScreenState extends State<ResultScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(_showDetails ? Icons.visibility_off : Icons.visibility,
-                          color: Colors.white, size: 14),
+                      Icon(
+                        _showDetails ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.white,
+                        size: 14,
+                      ),
                       const SizedBox(width: 4),
-                      Text(_showDetails ? 'Hide' : 'Details',
-                          style: const TextStyle(color: Colors.white, fontSize: 11)),
+                      Text(
+                        _showDetails ? 'Hide' : 'Details',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -435,12 +463,16 @@ class _ResultScreenState extends State<ResultScreen> {
             const SizedBox(height: 16),
             const Divider(color: Colors.white24),
             const SizedBox(height: 12),
-            const Text('Confidence', style: TextStyle(color: Colors.white70, fontSize: 12)),
+            const Text(
+              'Confidence',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
             const SizedBox(height: 8),
             ...predictions.take(3).toList().asMap().entries.map((entry) {
               final pred = entry.value;
               final predLabel = _displayLabel(pred['label'] as String?);
-              final predConf = ((pred['confidence'] as num?)?.toDouble() ?? 0.0) * 100;
+              final predConf =
+                  ((pred['confidence'] as num?)?.toDouble() ?? 0.0) * 100;
               final predRisk = _getRiskLevel(predConf / 100);
 
               return Padding(
@@ -455,24 +487,41 @@ class _ResultScreenState extends State<ResultScreen> {
                         shape: BoxShape.circle,
                       ),
                       child: Center(
-                        child: Text('${entry.key + 1}',
-                            style: const TextStyle(color: Colors.white, fontSize: 12)),
+                        child: Text(
+                          '${entry.key + 1}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(predLabel,
-                          style: const TextStyle(color: Colors.white, fontSize: 14)),
+                      child: Text(
+                        predLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
-                    Text('${predConf.toStringAsFixed(0)}%',
-                        style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                    Text(
+                      '${predConf.toStringAsFixed(0)}%',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    Text(predRisk,
-                        style: TextStyle(
-                          color: _getRiskColor(predRisk),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        )),
+                    Text(
+                      predRisk,
+                      style: TextStyle(
+                        color: _getRiskColor(predRisk),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -486,10 +535,12 @@ class _ResultScreenState extends State<ResultScreen> {
   /// Image Decisions section - Shows only the selected image (no carousel)
   Widget _buildImageDecisionsSection(bool isDark) {
     final selectedIndex = widget.selectedPredictionIndex;
-    final hasImages = widget.imagePaths.isNotEmpty &&
-                      selectedIndex >= 0 &&
-                      selectedIndex < widget.imagePaths.length;
-    final currentDecision = hasImages ? (_imageDecisions[selectedIndex] ?? "None") : "None";
+    final hasImages =
+        widget.imagePaths.isNotEmpty &&
+        selectedIndex >= 0 &&
+        selectedIndex < widget.imagePaths.length;
+    final currentDecision =
+        hasImages ? (_imageDecisions[selectedIndex] ?? "None") : "None";
 
     Color decisionColor;
     switch (currentDecision.toLowerCase()) {
@@ -523,15 +574,24 @@ class _ResultScreenState extends State<ResultScreen> {
             // Show which image is selected (e.g., "Image 2 of 3")
             if (widget.imagePaths.length > 1)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.15),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.5),
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   'Image ${selectedIndex + 1} of ${widget.imagePaths.length}',
-                  style: TextStyle(fontSize: 12, color: Colors.green[700], fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.green[700],
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
           ],
@@ -562,9 +622,10 @@ class _ResultScreenState extends State<ResultScreen> {
         if (hasImages)
           LayoutBuilder(
             builder: (context, constraints) {
-              final imageSize = constraints.maxWidth < 340
-                  ? 120.0
-                  : constraints.maxWidth < 420
+              final imageSize =
+                  constraints.maxWidth < 340
+                      ? 120.0
+                      : constraints.maxWidth < 420
                       ? 140.0
                       : 160.0;
 
@@ -572,7 +633,10 @@ class _ResultScreenState extends State<ResultScreen> {
               final rawTop = _topRawLabelForImage(selectedIndex);
               final imageTopLabel = _displayLabel(rawTop);
               final imageTopConf = _topConfidenceForImage(selectedIndex) * 100;
-              final scheme = _isCancerLikeLabel(rawTop) ? GradientScheme.red : GradientScheme.blue;
+              final scheme =
+                  _isCancerLikeLabel(rawTop)
+                      ? GradientScheme.red
+                      : GradientScheme.blue;
 
               return _buildGlassCard(
                 isDark: isDark,
@@ -607,7 +671,10 @@ class _ResultScreenState extends State<ResultScreen> {
                             ),
                             child: SevenLayerGradientBox(
                               radius: 18,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
                               scheme: scheme,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -651,7 +718,9 @@ class _ResultScreenState extends State<ResultScreen> {
                       const SizedBox(height: 8),
                       ...imagePreds.take(3).map((pred) {
                         final label = _displayLabel(pred['label'] as String?);
-                        final conf = ((pred['confidence'] as num?)?.toDouble() ?? 0.0) * 100;
+                        final conf =
+                            ((pred['confidence'] as num?)?.toDouble() ?? 0.0) *
+                            100;
                         final risk = _getRiskLevel(conf / 100);
 
                         return Padding(
@@ -659,7 +728,10 @@ class _ResultScreenState extends State<ResultScreen> {
                           child: Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: (isDark ? Colors.white : Colors.black)
                                       .withValues(alpha: 0.06),
@@ -668,7 +740,8 @@ class _ResultScreenState extends State<ResultScreen> {
                                 child: Text(
                                   label,
                                   style: TextStyle(
-                                    color: isDark ? Colors.white : Colors.black87,
+                                    color:
+                                        isDark ? Colors.white : Colors.black87,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -677,7 +750,10 @@ class _ResultScreenState extends State<ResultScreen> {
                               Text(
                                 '${conf.toStringAsFixed(0)}%',
                                 style: TextStyle(
-                                  color: isDark ? Colors.blue[200] : Colors.blue[700],
+                                  color:
+                                      isDark
+                                          ? Colors.blue[200]
+                                          : Colors.blue[700],
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -695,47 +771,6 @@ class _ResultScreenState extends State<ResultScreen> {
                       }),
                       const SizedBox(height: 12),
                     ],
-                    Text(
-                      'Decision',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          value: _imageDecisions[selectedIndex],
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? Colors.white : Colors.black87,
-                          ),
-                          hint: Text(
-                            "doctor's decision",
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey[600]),
-                          onChanged: (val) => setState(() => _imageDecisions[selectedIndex] = val),
-                          items: ['Confirm', 'Reject', 'Uncertain']
-                              .map((d) => DropdownMenuItem(value: d, child: Text(d)))
-                              .toList(),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               );
@@ -760,7 +795,11 @@ class _ResultScreenState extends State<ResultScreen> {
                   color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.lightbulb_outline, color: Colors.orange, size: 20),
+                child: const Icon(
+                  Icons.lightbulb_outline,
+                  color: Colors.orange,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Text(
@@ -778,9 +817,12 @@ class _ResultScreenState extends State<ResultScreen> {
             riskLevel == 'HIGH'
                 ? 'Urgent referral to a dermatologist for biopsy is recommended.'
                 : riskLevel == 'MODERATE'
-                    ? 'Follow-up examination with a dermatologist is recommended.'
-                    : 'Continue monitoring. Schedule follow-up if changes occur.',
-            style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[700]),
+                ? 'Follow-up examination with a dermatologist is recommended.'
+                : 'Continue monitoring. Schedule follow-up if changes occur.',
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? Colors.white70 : Colors.grey[700],
+            ),
           ),
           const SizedBox(height: 16),
           _buildActionLink('Add to Patient Record'),
@@ -811,9 +853,12 @@ class _ResultScreenState extends State<ResultScreen> {
   Future<void> _handleActionLink(String text) async {
     switch (text) {
       case 'Add to Patient Record':
-        final confidence = _topConfidenceForImage(widget.selectedPredictionIndex);
+        final confidence = _topConfidenceForImage(
+          widget.selectedPredictionIndex,
+        );
         final label = _displayLabel(
-          _topPredictionForImage(widget.selectedPredictionIndex)?['label'] as String?,
+          _topPredictionForImage(widget.selectedPredictionIndex)?['label']
+              as String?,
         );
         final riskLevel = _getRiskLevel(confidence);
         _appendNoteLine(
@@ -861,9 +906,9 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   void _showActionSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<String?> _showRejectDialog() async {
@@ -889,13 +934,19 @@ class _ResultScreenState extends State<ResultScreen> {
                   controller: _noteController,
                   minLines: 2,
                   maxLines: 4,
-                  style: TextStyle(fontSize: 13, color: isDark ? Colors.white : Colors.black),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
                   decoration: InputDecoration(
                     labelText: 'Doctor note (optional)',
                     hintText: 'Add notes here...',
                     hintStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
                     filled: true,
-                    fillColor: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey[100],
+                    fillColor:
+                        isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.grey[100],
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide(color: Colors.grey.shade300),
@@ -993,13 +1044,13 @@ class _ResultScreenState extends State<ResultScreen> {
                       }
                       return; // Stop execution on failure
                     }
-                    
+
                     if (!mounted) return;
 
                     try {
-                      await context.read<CaseService>().isActiveLearningCandidate(
-                        caseId: widget.caseId,
-                      );
+                      await context
+                          .read<CaseService>()
+                          .isActiveLearningCandidate(caseId: widget.caseId);
                     } catch (e) {
                       if (mounted) {
                         _showActionSnack("AL check failed: $e");
@@ -1015,7 +1066,9 @@ class _ResultScreenState extends State<ResultScreen> {
                     side: const BorderSide(color: Colors.red),
                     foregroundColor: Colors.red,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: const Text('Reject'),
                 ),
@@ -1044,7 +1097,9 @@ class _ResultScreenState extends State<ResultScreen> {
                     side: BorderSide(color: Colors.grey.shade400),
                     foregroundColor: Colors.grey[700],
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: const Text('Uncertain'),
                 ),
@@ -1078,7 +1133,9 @@ class _ResultScreenState extends State<ResultScreen> {
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: const Text('Confirm'),
                 ),
@@ -1133,7 +1190,9 @@ class SevenLayerGradientBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base =
-        scheme == GradientScheme.blue ? const Color(0xFF0051A2) : const Color(0xFF0D0D0D);
+        scheme == GradientScheme.blue
+            ? const Color(0xFF0051A2)
+            : const Color(0xFF0D0D0D);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
