@@ -1,7 +1,7 @@
 {
   "models": {
     "v20260205_001": {
-      "status": "production",
+      "status": "archived",
       "created_at": "2026-02-05T19:30:23.899817",
       "base_model": null,
       "training_config": {
@@ -66,9 +66,225 @@
       },
       "metrics": {},
       "path": "C:\\Users\\aoych\\Documents\\github\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260211_003\\pending.pt"
+    },
+    "v20260215_001": {
+      "status": "archived",
+      "created_at": "2026-02-15T16:40:20.329413",
+      "base_model": null,
+      "training_config": {
+        "epochs": 10,
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "optimizer": "Adam",
+        "dropout": 0.3,
+        "augmentation_applied": true
+      },
+      "metrics": {
+        "train_accuracy": 0.7647058823529411,
+        "val_accuracy": 0.2857142857142857,
+        "train_loss": 1.8358687162399292,
+        "val_loss": 1.8231273889541626,
+        "best_val_loss": 1.8231273889541626,
+        "samples_used": 24,
+        "new_samples_used": 24,
+        "replay_samples_used": 0,
+        "epochs_completed": 10,
+        "training_log_file": "training_log.json",
+        "experience_replay": {
+          "enabled": true,
+          "old_samples_total": 0,
+          "old_samples_selected": 0,
+          "quota": 0,
+          "herding_selected": 0,
+          "random_selected": 0
+        }
+      },
+      "path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260215_001\\[2026-02-15] - efficientnet_v2_m.pt",
+      "architecture": "efficientnet_v2_m",
+      "production_path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\production\\model.pt"
+    },
+    "v20260215_002": {
+      "status": "archived",
+      "created_at": "2026-02-15T16:57:40.505353",
+      "base_model": null,
+      "training_config": {
+        "epochs": 50,
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "optimizer": "Adam",
+        "dropout": 0.3,
+        "augmentation_applied": true
+      },
+      "metrics": {
+        "train_accuracy": 1.0,
+        "val_accuracy": 0.5714285714285714,
+        "train_loss": 0.7539217658340931,
+        "val_loss": 1.6547964811325073,
+        "best_val_loss": 1.6309794187545776,
+        "samples_used": 24,
+        "new_samples_used": 24,
+        "replay_samples_used": 0,
+        "epochs_completed": 50,
+        "training_log_file": "training_log.json",
+        "experience_replay": {
+          "enabled": true,
+          "old_samples_total": 0,
+          "old_samples_selected": 0,
+          "quota": 0,
+          "herding_selected": 0,
+          "random_selected": 0
+        }
+      },
+      "path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260215_002\\[2026-02-15] - efficientnet_v2_m.pt",
+      "architecture": "efficientnet_v2_m",
+      "production_path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\production\\model.pt"
+    },
+    "v20260215_003": {
+      "status": "archived",
+      "created_at": "2026-02-15T17:15:53.769112",
+      "base_model": null,
+      "training_config": {
+        "epochs": 10,
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "optimizer": "Adam",
+        "dropout": 0.3,
+        "augmentation_applied": true
+      },
+      "metrics": {
+        "train_accuracy": 0.7058823529411765,
+        "val_accuracy": 0.42857142857142855,
+        "train_loss": 1.164170742034912,
+        "val_loss": 1.922202229499817,
+        "best_val_loss": 1.869376540184021,
+        "samples_used": 24,
+        "new_samples_used": 24,
+        "replay_samples_used": 0,
+        "epochs_completed": 10,
+        "training_log_file": "training_log.json",
+        "experience_replay": {
+          "enabled": true,
+          "old_samples_total": 0,
+          "old_samples_selected": 0,
+          "quota": 0,
+          "herding_selected": 0,
+          "random_selected": 0
+        }
+      },
+      "path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260215_003\\[2026-02-15] - efficientnet_v2_m.pt",
+      "architecture": "efficientnet_v2_m",
+      "production_path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\production\\model.pt"
+    },
+    "v20260215_004": {
+      "status": "archived",
+      "created_at": "2026-02-15T17:20:39.608895",
+      "base_model": null,
+      "training_config": {
+        "epochs": 10,
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "optimizer": "Adam",
+        "dropout": 0.3,
+        "augmentation_applied": true
+      },
+      "metrics": {
+        "train_accuracy": 0.9411764705882353,
+        "val_accuracy": 0.2857142857142857,
+        "train_loss": 1.3023715019226074,
+        "val_loss": 1.8776395320892334,
+        "best_val_loss": 1.8776395320892334,
+        "samples_used": 24,
+        "new_samples_used": 24,
+        "replay_samples_used": 0,
+        "epochs_completed": 10,
+        "training_log_file": "training_log.json",
+        "experience_replay": {
+          "enabled": true,
+          "old_samples_total": 0,
+          "old_samples_selected": 0,
+          "quota": 0,
+          "herding_selected": 0,
+          "random_selected": 0
+        }
+      },
+      "path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260215_004\\[2026-02-15] - efficientnet_v2_m.pt",
+      "architecture": "efficientnet_v2_m",
+      "production_path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\production\\model.pt"
+    },
+    "v20260215_005": {
+      "status": "archived",
+      "created_at": "2026-02-15T17:31:56.530857",
+      "base_model": null,
+      "training_config": {
+        "epochs": 10,
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "optimizer": "Adam",
+        "dropout": 0.3,
+        "augmentation_applied": true
+      },
+      "metrics": {
+        "train_accuracy": 0.8823529411764706,
+        "val_accuracy": 0.2857142857142857,
+        "train_loss": 1.1515249013900757,
+        "val_loss": 1.8463159799575806,
+        "best_val_loss": 1.845062017440796,
+        "samples_used": 24,
+        "new_samples_used": 24,
+        "replay_samples_used": 0,
+        "epochs_completed": 10,
+        "training_log_file": "training_log.json",
+        "experience_replay": {
+          "enabled": true,
+          "old_samples_total": 0,
+          "old_samples_selected": 0,
+          "quota": 0,
+          "herding_selected": 0,
+          "random_selected": 0
+        }
+      },
+      "path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260215_005\\[2026-02-15] - efficientnet_v2_m.pt",
+      "architecture": "efficientnet_v2_m",
+      "production_path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\production\\model.pt"
+    },
+    "v20260215_006": {
+      "status": "production",
+      "created_at": "2026-02-15T17:35:12.158211",
+      "base_model": null,
+      "training_config": {
+        "epochs": 30,
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "optimizer": "Adam",
+        "dropout": 0.3,
+        "augmentation_applied": true
+      },
+      "metrics": {
+        "train_accuracy": 0.9411764705882353,
+        "val_accuracy": 0.42857142857142855,
+        "train_loss": 0.9011392593383789,
+        "val_loss": 1.8931035995483398,
+        "best_val_loss": 1.797480821609497,
+        "samples_used": 24,
+        "new_samples_used": 24,
+        "replay_samples_used": 0,
+        "epochs_completed": 30,
+        "training_log_file": "training_log.json",
+        "experience_replay": {
+          "enabled": true,
+          "old_samples_total": 0,
+          "old_samples_selected": 0,
+          "quota": 0,
+          "herding_selected": 0,
+          "random_selected": 0
+        }
+      },
+      "path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260215_006\\[2026-02-15] - efficientnet_v2_m.pt",
+      "architecture": "efficientnet_v2_m",
+      "production_path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\production\\model.pt"
     }
   },
-  "current_production": "v20260205_001",
+  "current_production": "v20260215_006",
   "pending_promotion": null,
   "active_inference": {
     "version_id": "v20260205_001",

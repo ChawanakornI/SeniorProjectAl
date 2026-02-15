@@ -12,7 +12,7 @@ def _get_env_list(key: str, default: str = "") -> List[str]:
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-MODEL_ASSETS_DIR = Path(os.getenv("MODEL_ASSETS_DIR", str(PROJECT_ROOT / "assets" / "model")))
+MODEL_ASSETS_DIR = Path(os.getenv("MODEL_ASSETS_DIR", str(PROJECT_ROOT / "assets" / "models")))
 _default_model_extensions = ".pt,.pth,.jit,.pth.tar"
 MODEL_FILE_EXTENSIONS: List[str] = [
     ext.strip().lower()
@@ -58,11 +58,11 @@ MODEL_PATH: str = _discover_default_model_path()
 MODEL_DEVICE: str = os.getenv("MODEL_DEVICE", "").strip().lower()
 BLUR_THRESHOLD: float = float(os.getenv("BLUR_THRESHOLD", "50.0"))
 CONF_THRESHOLD: float = float(os.getenv("CONF_THRESHOLD", "0.5"))
-RETRAIN_MIN_NEW_LABELS: int = int(os.getenv("RETRAIN_MIN_NEW_LABELS", "2"))
-RETRAIN_DEFAULT_EPOCHS: int = int(os.getenv("RETRAIN_DEFAULT_EPOCHS", "1"))
+RETRAIN_MIN_NEW_LABELS: int = int(os.getenv("RETRAIN_MIN_NEW_LABELS", "20"))
+RETRAIN_DEFAULT_EPOCHS: int = int(os.getenv("RETRAIN_DEFAULT_EPOCHS", "10"))
 RETRAIN_DEFAULT_BATCH_SIZE: int = int(os.getenv("RETRAIN_DEFAULT_BATCH_SIZE", "16"))
 # Retrain device preference: "auto", "cuda", or "cpu"
-RETRAIN_DEVICE: str = os.getenv("RETRAIN_DEVICE", "auto").strip().lower()
+RETRAIN_DEVICE: str = os.getenv("RETRAIN_DEVICE", "cuda").strip().lower()
 _storage_root = os.getenv("STORAGE_ROOT") or os.getenv("STORAGE_DIR")
 STORAGE_ROOT: str = _storage_root or os.path.join(os.path.dirname(__file__), "storage")
 USER_STORAGE_PREFIX: str = os.getenv("USER_STORAGE_PREFIX", "user")
@@ -104,30 +104,31 @@ AL_ACTIVE_CONFIG_FILE: str = os.path.join(AL_WORKSPACE_ROOT, "config", "active_c
 AL_LABELS_USED_MODELS_FIELD: str = os.getenv("AL_LABELS_USED_MODELS_FIELD", "used_in_models")
 AL_IMAGE_RETRAIN_HISTORY_FIELD: str = os.getenv("AL_IMAGE_RETRAIN_HISTORY_FIELD", "image_retrain_history")
 AL_TRAINING_LOG_FILENAME: str = os.getenv("AL_TRAINING_LOG_FILENAME", "training_log.json")
+# Force retraining to start from AL_BASE_MODELS (skip production model history).
+# Set to "false" to restore production-first warm start behavior.
+AL_FORCE_BASE_MODEL_ONLY: bool = os.getenv("AL_FORCE_BASE_MODEL_ONLY", "true").strip().lower() in ("1", "true", "yes")
 
 # Experience Replay configuration (old data + new labeled data)
 AL_EXPERIENCE_REPLAY_ENABLED: bool = os.getenv("AL_EXPERIENCE_REPLAY_ENABLED", "true").strip().lower() in ("1", "true", "yes")
 AL_OLD_DATASET_DIR: str = os.getenv("AL_OLD_DATASET_DIR", str(PROJECT_ROOT / "assets" / "Old_Dataset"))
-AL_OLD_DATA_CSV: str = os.getenv("AL_OLD_DATA_CSV", str(PROJECT_ROOT / "assets" / "Old data.csv"))
-AL_OLD_DATA_CSV_IMAGE_COLUMN: str = os.getenv("AL_OLD_DATA_CSV_IMAGE_COLUMN", "img_id").strip()
-AL_OLD_DATA_CSV_LABEL_COLUMN: str = os.getenv("AL_OLD_DATA_CSV_LABEL_COLUMN", "diagnostic").strip()
-AL_REPLAY_OLD_QUOTA: int = int(os.getenv("AL_REPLAY_OLD_QUOTA", "1000"))
+AL_OLD_DATA_CSV: str = os.getenv("AL_OLD_DATA_CSV", str(PROJECT_ROOT / "assets" / "HAM10000_metadata"))
+AL_OLD_DATA_CSV_IMAGE_COLUMN: str = os.getenv("AL_OLD_DATA_CSV_IMAGE_COLUMN", "image_id").strip()
+AL_OLD_DATA_CSV_LABEL_COLUMN: str = os.getenv("AL_OLD_DATA_CSV_LABEL_COLUMN", "dx").strip()
+AL_REPLAY_OLD_QUOTA: int = int(os.getenv("AL_REPLAY_OLD_QUOTA", "200"))
 AL_REPLAY_HERDING_RATIO: float = float(os.getenv("AL_REPLAY_HERDING_RATIO", "0.8"))
 AL_REPLAY_RANDOM_RATIO: float = float(os.getenv("AL_REPLAY_RANDOM_RATIO", "0.2"))
 AL_REPLAY_RANDOM_SEED: int = int(os.getenv("AL_REPLAY_RANDOM_SEED", "42"))
 AL_REPLAY_IMAGE_SIZE: int = int(os.getenv("AL_REPLAY_IMAGE_SIZE", "224"))
 AL_REPLAY_BATCH_SIZE: int = int(os.getenv("AL_REPLAY_BATCH_SIZE", "32"))
 _default_old_label_map = {
-    "ACK": "akiec",
-    "SCC": "akiec",
-    "BCC": "bcc",
-    "SEK": "bkl",
-    "BKL": "bkl",
-    "MEL": "mel",
-    "NEV": "nv",
-    "NV": "nv",
-    "VASC": "vasc",
-    "DF": "df",
+    "akiec": "akiec",
+    "bcc": "bcc",
+    "bkl": "bkl",
+    "df": "df",
+    "mel": "mel",
+    "nv": "nv",
+    "vasc": "vasc",
+    
 }
 AL_OLD_DATA_LABEL_MAP: dict = json.loads(os.getenv("AL_OLD_DATA_LABEL_MAP", json.dumps(_default_old_label_map)))
 AL_SPLIT_SEED: int = int(os.getenv("AL_SPLIT_SEED", "42"))
