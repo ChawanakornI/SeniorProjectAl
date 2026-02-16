@@ -440,8 +440,20 @@ def collect_old_dataset_samples() -> List[Tuple[str, int]]:
             if not mapped_label:
                 continue
 
-            img_path = os.path.join(dataset_dir, img_name)
-            if not os.path.exists(img_path):
+            # CSV image_id may come without extension (e.g. ISIC_0027419),
+            # while files on disk are typically .jpg.
+            candidate_names = [img_name]
+            if not os.path.splitext(img_name)[1]:
+                candidate_names.extend([f"{img_name}.jpg", f"{img_name}.jpeg", f"{img_name}.png"])
+
+            img_path = None
+            for candidate in candidate_names:
+                candidate_path = os.path.join(dataset_dir, candidate)
+                if os.path.exists(candidate_path):
+                    img_path = candidate_path
+                    break
+
+            if not img_path:
                 continue
 
             samples.append((img_path, config.LABEL_MAP[mapped_label]))
