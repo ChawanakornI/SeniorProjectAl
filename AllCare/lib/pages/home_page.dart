@@ -306,7 +306,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Welcome to ALLCARE',
+                      'Welcome to Dermalytix_Active',
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,

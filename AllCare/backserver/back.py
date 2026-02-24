@@ -1243,7 +1243,7 @@ async def activate_inference_model(
     if not model_registry.set_active_inference_model(version_id, path):
         raise HTTPException(status_code=400, detail="Failed to set active inference model")
 
-    model_service.set_model_path(path)
+    model_service.set_model_path(path, source="AL")
 
     return {
         "status": "ok",
@@ -1335,7 +1335,7 @@ async def trigger_retrain(
 
 
 @app.get("/admin/retrain/status", dependencies=[Depends(require_api_key)])
-async def get_retrain_status_endpoint(user_context: Dict[str, str] = Depends(require_admin_role)):
+async def get_admin_retrain_status_endpoint(user_context: Dict[str, str] = Depends(require_admin_role)):
     """Get current retraining status."""
     status = get_retrain_status()
     threshold_info = check_retrain_threshold()
@@ -1417,7 +1417,7 @@ async def get_labels(
     }
 
 
-model_service = ModelService(conf_threshold=config.CONF_THRESHOLD)
+model_service = ModelService(conf_threshold=config.CONF_THRESHOLD, source="normalClassifier")
 active_inference = model_registry.get_active_inference_model()
 if active_inference:
     candidate_paths = [

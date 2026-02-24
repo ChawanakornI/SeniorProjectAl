@@ -50,7 +50,7 @@ except ImportError:
 
 
 class ModelService:
-    def __init__(self, model_path: str | None = None, conf_threshold: float = 0.5):
+    def __init__(self, model_path: str | None = None, conf_threshold: float = 0.5, source: str = "model"):
         self.model_path = model_path or getattr(config, "MODEL_PATH", "")
         self.conf_threshold = conf_threshold
         self.model = None
@@ -65,7 +65,7 @@ class ModelService:
             "nv",
             "vasc",
         ]
-        self._load()
+        self._load(source=source)
 
     def _is_torchscript_archive(self, path: str) -> bool:
         """Check if the file is a TorchScript archive (zip with constants.pkl)."""
@@ -79,12 +79,12 @@ class ModelService:
         except Exception:
             return False
 
-    def _load(self):
+    def _load(self, source: str = "model"):
         if torch is None or nn is None or models is None:
-            print("[model] torch/torchvision not installed; running in dummy mode.")
+            print(f"[{source}] torch/torchvision not installed; running in dummy mode.")
             return
         if not self.model_path or not os.path.isfile(self.model_path):
-            print("[model] MODEL_PATH missing or not a file; running in dummy mode.")
+            print(f"[{source}] MODEL_PATH missing or not a file; running in dummy mode.")
             return
 
         # 1) Try torchscript only if file looks like a TorchScript archive
@@ -92,10 +92,10 @@ class ModelService:
             try:
                 self.model = torch.jit.load(self.model_path, map_location=self.device)
                 self.model.to(self.device).eval()
-                print(f"[model] loaded torchscript model from {self.model_path}")
+                print(f"[{source}] loaded torchscript model from {self.model_path}")
                 return
             except Exception as exc:
-                print(f"[model] torchscript load failed: {exc}")
+                print(f"[{source}] torchscript load failed: {exc}")
 
         # 2) Try checkpoint with state_dict (ResNet50 or EfficientNetV2-M)
         try:
@@ -118,7 +118,7 @@ class ModelService:
                 
                 self.model = model
                 arch_label = architecture or "unknown"
-                print(f"[model] loaded {arch_label} checkpoint from {self.model_path}")
+                print(f"[{source}] loaded {arch_label} checkpoint from {self.model_path}")
                 return
             # If the loaded object is already a module, use it directly
             if hasattr(checkpoint, "eval") and callable(getattr(checkpoint, "eval")):
@@ -126,12 +126,12 @@ class ModelService:
                 # if hasattr(checkpoint, 'apply'):
                 #     checkpoint.apply(self._set_deterministic_flags)
                 self.model = checkpoint
-                print(f"[model] loaded torch model object from {self.model_path}")
+                print(f"[{source}] loaded torch model object from {self.model_path}")
                 return
         except Exception as exc:
-            print(f"[model] checkpoint load failed: {exc}")
+            print(f"[{source}] checkpoint load failed: {exc}")
 
-        print("[model] unable to load model; running in dummy mode.")
+        print(f"[{source}] unable to load model; running in dummy mode.")
 
     def _detect_architecture_from_state_dict(self, state_dict) -> str | None:
         keys = list(state_dict.keys())
@@ -158,10 +158,16 @@ class ModelService:
         model.fc = nn.Sequential(nn.Dropout(p=0.3), nn.Linear(in_features, num_classes))
         return model
 
-    def set_model_path(self, model_path: str) -> None:
+    def set_model_path(self, model_path: str, source: str = "model") -> None:
+        prev_model = self.model
+        prev_path = self.model_path
         self.model_path = model_path
         self.model = None
-        self._load()
+        self._load(source=source)
+        if self.model is None and prev_model is not None:
+            print(f"[{source}] load failed; reverting to previous model.")
+            self.model = prev_model
+            self.model_path = prev_path
 
     # def _set_deterministic_flags(self, module):
     #     """
@@ -268,3 +274,7 @@ class ModelService:
             preds.append({"label": self.class_names[i] if i < len(self.class_names) else f"class_{i}", "confidence": float(p)})
         preds = sorted(preds, key=lambda x: x["confidence"], reverse=True)
         return preds
+
+
+# Singleton instance
+model_service = ModelService(conf_threshold=config.CONF_THRESHOLD, source="normalClassifier")

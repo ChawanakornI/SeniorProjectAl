@@ -12,7 +12,7 @@ def _get_env_list(key: str, default: str = "") -> List[str]:
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-MODEL_ASSETS_DIR = Path(os.getenv("MODEL_ASSETS_DIR", str(PROJECT_ROOT / "assets" / "models")))
+MODEL_ASSETS_DIR = Path(os.getenv("MODEL_ASSETS_DIR", str(PROJECT_ROOT / "assets" / "modelss")))
 _default_model_extensions = ".pt,.pth,.jit,.pth.tar"
 MODEL_FILE_EXTENSIONS: List[str] = [
     ext.strip().lower()
