@@ -7,10 +7,13 @@ Uses JSONL format for efficient append operations.
 
 import json
 import os
+import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
 from . import config
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_image_retrain_history(label: Dict[str, Any]) -> Dict[str, List[str]]:
@@ -41,11 +44,18 @@ def _load_all_labels() -> List[Dict[str, Any]]:
         return []
 
     labels = []
-    with open(config.AL_LABELS_POOL_FILE, "r") as f:
-        for line in f:
-            line = line.strip()
-            if line:
+    with open(config.AL_LABELS_POOL_FILE, "r", encoding="utf-8") as f:
+        for line_number, raw_line in enumerate(f, start=1):
+            line = raw_line.strip()
+            if not line or line.startswith("//"):
+                continue
+            try:
                 labels.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning(
+                    "Skipping malformed JSON in labels pool file at line %s",
+                    line_number
+                )
 
     return labels
 

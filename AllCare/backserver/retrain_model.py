@@ -440,8 +440,20 @@ def collect_old_dataset_samples() -> List[Tuple[str, int]]:
             if not mapped_label:
                 continue
 
-            img_path = os.path.join(dataset_dir, img_name)
-            if not os.path.exists(img_path):
+            # CSV image_id may come without extension (e.g. ISIC_0027419),
+            # while files on disk are typically .jpg.
+            candidate_names = [img_name]
+            if not os.path.splitext(img_name)[1]:
+                candidate_names.extend([f"{img_name}.jpg", f"{img_name}.jpeg", f"{img_name}.png"])
+
+            img_path = None
+            for candidate in candidate_names:
+                candidate_path = os.path.join(dataset_dir, candidate)
+                if os.path.exists(candidate_path):
+                    img_path = candidate_path
+                    break
+
+            if not img_path:
                 continue
 
             samples.append((img_path, config.LABEL_MAP[mapped_label]))
@@ -787,6 +799,91 @@ def build_training_plot_data(training_log: List[Dict[str, Any]]) -> Dict[str, An
     }
 
 
+def _trim_xy(epochs: List[int], values: List[Any]) -> Tuple[List[int], List[Any]]:
+    point_count = min(len(epochs), len(values))
+    return epochs[:point_count], values[:point_count]
+
+
+def _pick_accuracy_keys(series: Dict[str, List[Any]]) -> Tuple[Optional[str], Optional[str]]:
+    train_key = "train_accuracy" if "train_accuracy" in series else None
+    val_key = "val_accuracy" if "val_accuracy" in series else None
+    if train_key is None and "accuracy" in series:
+        train_key = "accuracy"
+    return train_key, val_key
+
+
+def _generate_training_graph(version_id: str) -> Optional[str]:
+    """Generate epoch loss/accuracy graph for a trained model version."""
+    training_log = load_training_log(version_id)
+    if not training_log:
+        return None
+
+    plot_data = build_training_plot_data(training_log)
+    epochs = plot_data.get("epochs", [])
+    series = plot_data.get("series", {})
+    if not epochs or not isinstance(series, dict):
+        return None
+    if "train_loss" not in series or "val_loss" not in series:
+        return None
+
+    train_acc_key, val_acc_key = _pick_accuracy_keys(series)
+    if train_acc_key is None and val_acc_key is None:
+        return None
+
+    try:
+        import matplotlib.pyplot as plt
+    except Exception as err:
+        print(f"[retrain] Graph generation skipped (matplotlib unavailable): {err}")
+        return None
+
+    graph_dir = Path(__file__).resolve().parent / "graph"
+    graph_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = graph_dir / f"epoch_loss_accuracy_{version_id}_{timestamp}.png"
+
+    fig, ax_loss = plt.subplots(figsize=(11, 6.5))
+    x_train_loss, y_train_loss = _trim_xy(epochs, series.get("train_loss", []))
+    x_val_loss, y_val_loss = _trim_xy(epochs, series.get("val_loss", []))
+    ax_loss.plot(x_train_loss, y_train_loss, color="#1f77b4", label="Train Loss", linewidth=2)
+    ax_loss.plot(x_val_loss, y_val_loss, color="#ff7f0e", label="Val Loss", linewidth=2)
+    ax_loss.set_xlabel("Epoch")
+    ax_loss.set_ylabel("Loss")
+    ax_loss.grid(True, alpha=0.3)
+
+    ax_acc = ax_loss.twinx()
+    if train_acc_key is not None:
+        x_train_acc, y_train_acc = _trim_xy(epochs, series.get(train_acc_key, []))
+        ax_acc.plot(
+            x_train_acc,
+            y_train_acc,
+            color="#2ca02c",
+            label="Train Accuracy",
+            linestyle="--",
+            linewidth=2,
+        )
+    if val_acc_key is not None:
+        x_val_acc, y_val_acc = _trim_xy(epochs, series.get(val_acc_key, []))
+        ax_acc.plot(
+            x_val_acc,
+            y_val_acc,
+            color="#d62728",
+            label="Val Accuracy",
+            linestyle="--",
+            linewidth=2,
+        )
+    ax_acc.set_ylabel("Accuracy")
+    ax_acc.set_ylim(0.0, 1.05)
+
+    lines_1, labels_1 = ax_loss.get_legend_handles_labels()
+    lines_2, labels_2 = ax_acc.get_legend_handles_labels()
+    ax_loss.legend(lines_1 + lines_2, labels_1 + labels_2, loc="best")
+    plt.title(f"Epoch vs Train/Val Loss and Accuracy ({version_id})")
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=160)
+    plt.close(fig)
+    return str(output_path)
+
+
 # =============================================================================
 # Base Model Loading (Transfer Learning)
 # =============================================================================
@@ -799,8 +896,8 @@ def load_base_model(
     Load the base model for transfer learning.
 
     Priority:
-    1. Current production model from registry
-    2. Base checkpoint from AL_BASE_MODELS config
+    1. Base checkpoint from AL_BASE_MODELS config (when AL_FORCE_BASE_MODEL_ONLY=true)
+    2. Current production model from registry (when base-only mode disabled)
     3. Fresh ImageNet-pretrained model (fallback)
 
     Args:
@@ -813,20 +910,6 @@ def load_base_model(
     target_arch = normalize_architecture_name(architecture)
     num_classes = len(config.LABEL_MAP)
 
-    # Try to load production model from registry
-    prod_model = model_registry.get_production_model()
-    if prod_model:
-        prod_path = prod_model.get("production_path") or prod_model.get("path")
-        prod_arch = prod_model.get("architecture", target_arch)
-
-        if prod_path and os.path.exists(prod_path):
-            try:
-                model, detected_arch = load_checkpoint(prod_path, device, prod_arch)
-                print(f"[retrain] Loaded production model: {prod_model['version_id']} ({detected_arch})")
-                return model, prod_model["version_id"], detected_arch
-            except Exception as e:
-                print(f"[retrain] Failed to load production model: {e}")
-
     # Try base checkpoint for the target architecture
     base_path = config.AL_BASE_MODELS.get(target_arch)
     if base_path and os.path.exists(base_path):
@@ -837,6 +920,21 @@ def load_base_model(
         except Exception as e:
             print(f"[retrain] Failed to load base checkpoint: {e}")
 
+    # Try to load production model from registry when base-only mode is disabled.
+    if not config.AL_FORCE_BASE_MODEL_ONLY:
+        prod_model = model_registry.get_production_model()
+        if prod_model:
+            prod_path = prod_model.get("production_path") or prod_model.get("path")
+            prod_arch = prod_model.get("architecture", target_arch)
+
+            if prod_path and os.path.exists(prod_path):
+                try:
+                    model, detected_arch = load_checkpoint(prod_path, device, prod_arch)
+                    print(f"[retrain] Loaded production model: {prod_model['version_id']} ({detected_arch})")
+                    return model, prod_model["version_id"], detected_arch
+                except Exception as e:
+                    print(f"[retrain] Failed to load production model: {e}")
+
     # Fallback: fresh ImageNet-pretrained model
     print(f"[retrain] Using fresh ImageNet-pretrained {target_arch}")
     model = create_model_with_pretrained_weights(target_arch, num_classes)
@@ -844,17 +942,41 @@ def load_base_model(
 
 
 def _split_samples_for_training(samples: List[Tuple[str, int]]) -> Tuple[List[Tuple[str, int]], List[Tuple[str, int]]]:
-    """Deterministic train/val split controlled by config."""
+    """Deterministic stratified train/val split controlled by config."""
     if not samples:
         return [], []
     ratio = max(0.1, min(0.95, float(config.AL_SPLIT_TRAIN_RATIO)))
     rng = random.Random(config.AL_SPLIT_SEED)
-    shuffled = list(samples)
-    rng.shuffle(shuffled)
-    train_size = max(1, int(len(shuffled) * ratio))
-    if train_size >= len(shuffled):
-        train_size = max(1, len(shuffled) - 1)
-    return shuffled[:train_size], shuffled[train_size:]
+    by_label: Dict[int, List[Tuple[str, int]]] = defaultdict(list)
+    for sample in samples:
+        by_label[sample[1]].append(sample)
+
+    train_samples: List[Tuple[str, int]] = []
+    val_samples: List[Tuple[str, int]] = []
+
+    for label in sorted(by_label.keys()):
+        class_samples = list(by_label[label])
+        rng.shuffle(class_samples)
+        class_count = len(class_samples)
+
+        if class_count <= 1:
+            # Single-sample classes cannot be represented in both splits.
+            train_samples.extend(class_samples)
+            continue
+
+        class_train_size = int(class_count * ratio)
+        class_train_size = max(1, min(class_train_size, class_count - 1))
+        train_samples.extend(class_samples[:class_train_size])
+        val_samples.extend(class_samples[class_train_size:])
+
+    # Keep at least one sample in validation when possible.
+    if not val_samples and len(train_samples) > 1:
+        moved = train_samples.pop()
+        val_samples.append(moved)
+
+    rng.shuffle(train_samples)
+    rng.shuffle(val_samples)
+    return train_samples, val_samples
 
 
 def _build_replay_summary_placeholder() -> Dict[str, Any]:
@@ -1127,6 +1249,7 @@ def retrain_model(
         replay_samples: List[Tuple[str, int]] = []
         replay_summary: Dict[str, Any] = _build_replay_summary_placeholder()
         completion_acc = 0.0
+        graph_path: Optional[str] = None
 
         if architecture == config.ModelArchitecture.YOLO:
             # Use a lightweight torch backbone for replay herding features.
@@ -1322,6 +1445,12 @@ def retrain_model(
 
         # Log completion
         event_log.log_training_completed(version_id, completion_acc, len(samples))
+        try:
+            graph_path = _generate_training_graph(version_id)
+            if graph_path:
+                print(f"[retrain] Training graph saved: {graph_path}")
+        except Exception as graph_err:
+            print(f"[retrain] Training graph generation failed: {graph_err}")
 
         print(f"Model saved to {output_path} (architecture: {arch})")
 
@@ -1335,7 +1464,8 @@ def retrain_model(
             "experience_replay": replay_summary,
             "path": output_path,
             "base_model": base_model_id,
-            "architecture": arch
+            "architecture": arch,
+            "graph_path": graph_path,
         }
 
     except Exception as e:

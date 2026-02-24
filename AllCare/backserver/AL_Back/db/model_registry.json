@@ -23,7 +23,7 @@
       "production_path": "C:\\Users\\aoych\\Documents\\github\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\production\\model.pt"
     },
     "v20260211_001": {
-      "status": "training",
+      "status": "failed",
       "created_at": "2026-02-11T18:34:10.833076",
       "base_model": null,
       "training_config": {
@@ -38,7 +38,7 @@
       "path": "C:\\Users\\aoych\\Documents\\github\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260211_001\\pending.pt"
     },
     "v20260211_002": {
-      "status": "training",
+      "status": "failed",
       "created_at": "2026-02-11T20:29:20.535756",
       "base_model": null,
       "training_config": {
@@ -53,7 +53,7 @@
       "path": "C:\\Users\\aoych\\Documents\\github\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260211_002\\pending.pt"
     },
     "v20260211_003": {
-      "status": "training",
+      "status": "failed",
       "created_at": "2026-02-11T20:37:44.489029",
       "base_model": null,
       "training_config": {
@@ -66,6 +66,36 @@
       },
       "metrics": {},
       "path": "C:\\Users\\aoych\\Documents\\github\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260211_003\\pending.pt"
+    },
+    "v20260216_001": {
+      "status": "failed",
+      "created_at": "2026-02-16T13:52:13.918878",
+      "base_model": null,
+      "training_config": {
+        "epochs": 10,
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "optimizer": "Adam",
+        "dropout": 0.3,
+        "augmentation_applied": true
+      },
+      "metrics": {},
+      "path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260216_001\\pending.pt"
+    },
+    "v20260216_002": {
+      "status": "failed",
+      "created_at": "2026-02-16T13:56:42.402074",
+      "base_model": null,
+      "training_config": {
+        "epochs": 10,
+        "batch_size": 16,
+        "learning_rate": 0.0001,
+        "optimizer": "Adam",
+        "dropout": 0.3,
+        "augmentation_applied": true
+      },
+      "metrics": {},
+      "path": "D:\\Senior Project\\SeniorProjectAl\\AllCare\\backserver\\AL_Back\\models\\candidates\\v20260216_002\\pending.pt"
     }
   },
   "current_production": "v20260205_001",
