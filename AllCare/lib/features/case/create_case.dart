@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../theme/glass.dart';
 import '../../theme/glass_inline_dropdown.dart';
@@ -52,7 +53,11 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
   String? _selectedGender;
   String? _selectedAge;
   String? _selectedSpecificLocation;
+  bool _isFrontView = true;
+  String? _detectedBodyRegion;
+  Offset? _lastTapNormalized;
   late final TextEditingController _hashController;
+  late final TransformationController _bodyMapTransformController;
 
   late final TextEditingController _customSymptomsController;
   String? _caseId;
@@ -77,6 +82,39 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     'The patient has relatives who have had cancer.': false,
   };
 
+  static const List<String> _locationItems = [
+    'Front Head',
+    'Front Neck',
+    'Front Chest',
+    'Front Abdomen',
+    'Front Left Arm',
+    'Front Right Arm',
+    'Front Left Forearm',
+    'Front Right Forearm',
+    'Front Left Hand',
+    'Front Right Hand',
+    'Front Left Thigh',
+    'Front Right Thigh',
+    'Front Left Leg',
+    'Front Right Leg',
+    'Front Left Foot',
+    'Front Right Foot',
+    'Back Upper Back',
+    'Back Lower Back',
+    'Back Left Arm',
+    'Back Right Arm',
+    'Back Left Forearm',
+    'Back Right Forearm',
+    'Back Left Hand',
+    'Back Right Hand',
+    'Back Left Thigh',
+    'Back Right Thigh',
+    'Back Left Leg',
+    'Back Right Leg',
+    'Back Left Foot',
+    'Back Right Foot',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -95,6 +133,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
 
     // Set initial text. If caseId is missing, we'll fetch it.
     _hashController = TextEditingController(text: _caseId ?? 'Loading...');
+    _bodyMapTransformController = TransformationController();
 
     _customSymptomsController = TextEditingController();
 
@@ -115,6 +154,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
   @override
   void dispose() {
     _hashController.dispose();
+    _bodyMapTransformController.dispose();
 
     _customSymptomsController.dispose();
     super.dispose();
@@ -361,13 +401,13 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                         label: 'Specific Location',
                         hint: 'Select Specific Location',
                         value: _selectedSpecificLocation,
-                        items: const ['Face', 'Arm', 'Leg', 'Back'],
+                        items: _locationItems,
                         isDark: isDark,
                         onChanged:
                             (v) => setState(() => _selectedSpecificLocation = v),
                       ),
                       const SizedBox(height: 20),
-                      _bodyMapPlaceholder(isDark),
+                      _buildBodyMap(isDark),
                     ],
                   ),
                 ),
@@ -526,19 +566,196 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     );
   }
 
-  Widget _bodyMapPlaceholder(bool isDark) {
-    return AspectRatio(
-      aspectRatio: 1,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isDark ? Colors.white24 : Colors.grey.shade300,
+  Widget _buildBodyMap(bool isDark) {
+    final assetPath =
+        _isFrontView ? 'assets/images/Front.svg' : 'assets/images/Back.svg';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildBodyViewToggle(isDark),
+        const SizedBox(height: 12),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 480),
+            child: SizedBox(
+              width: double.infinity,
+              height: 520,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final size = Size(
+                      constraints.maxWidth,
+                      constraints.maxHeight,
+                    );
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (details) {
+                        final inverse = Matrix4.inverted(
+                          _bodyMapTransformController.value,
+                        );
+                        final mappedPoint =
+                            MatrixUtils.transformPoint(
+                              inverse,
+                              details.localPosition,
+                            );
+                        final normalized = Offset(
+                          mappedPoint.dx / size.width,
+                          mappedPoint.dy / size.height,
+                        );
+                        final region = _mapBodyRegion(normalized, _isFrontView);
+                        if (region == null) return;
+                        setState(() {
+                          _lastTapNormalized = normalized;
+                          _detectedBodyRegion = region;
+                          _selectedSpecificLocation = region;
+                        });
+                      },
+                      child: InteractiveViewer(
+                        transformationController: _bodyMapTransformController,
+                        minScale: 1,
+                        maxScale: 4,
+                        boundaryMargin: const EdgeInsets.all(40),
+                        alignment: Alignment.center,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: Center(
+                                child: SvgPicture.asset(
+                                  assetPath,
+                                  fit: BoxFit.contain,
+                                  alignment: Alignment.center,
+                                ),
+                              ),
+                            ),
+                            if (_lastTapNormalized != null)
+                              Positioned(
+                                left: (_lastTapNormalized!.dx * size.width) - 6,
+                                top: (_lastTapNormalized!.dy * size.height) - 6,
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withValues(alpha: 0.85),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
         ),
-        child: const Center(child: Text('[Body Map]')),
-      ),
+        const SizedBox(height: 8),
+        Text(
+          _detectedBodyRegion == null
+              ? 'Tap on the body map to auto-fill location.'
+              : 'Detected: $_detectedBodyRegion',
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.white70 : Colors.grey.shade700,
+          ),
+        ),
+      ],
     );
+  }
+
+  Widget _buildBodyViewToggle(bool isDark) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed:
+                _isFrontView
+                    ? null
+                    : () {
+                      setState(() {
+                        _isFrontView = true;
+                        _bodyMapTransformController.value = Matrix4.identity();
+                      });
+                    },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: isDark ? Colors.white : Colors.black87,
+              side: BorderSide(
+                color:
+                    _isFrontView
+                        ? (isDark ? Colors.white70 : Colors.black87)
+                        : (isDark ? Colors.white24 : Colors.grey.shade400),
+              ),
+            ),
+            child: const Text('Front'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton(
+            onPressed:
+                _isFrontView
+                    ? () {
+                      setState(() {
+                        _isFrontView = false;
+                        _bodyMapTransformController.value = Matrix4.identity();
+                      });
+                    }
+                    : null,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: isDark ? Colors.white : Colors.black87,
+              side: BorderSide(
+                color:
+                    !_isFrontView
+                        ? (isDark ? Colors.white70 : Colors.black87)
+                        : (isDark ? Colors.white24 : Colors.grey.shade400),
+              ),
+            ),
+            child: const Text('Back'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String? _mapBodyRegion(Offset normalized, bool isFront) {
+    final x = normalized.dx;
+    final y = normalized.dy;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+
+    final side = x < 0.5 ? 'Left' : 'Right';
+    final view = isFront ? 'Front' : 'Back';
+
+    if (y < 0.12) {
+      return '$view Head';
+    }
+    if (y < 0.18) {
+      return '$view Neck';
+    }
+
+    final isArmZone = y >= 0.2 && y <= 0.62 && (x < 0.24 || x > 0.76);
+    if (isArmZone) {
+      if (y < 0.38) return '$view $side Arm';
+      if (y < 0.52) return '$view $side Forearm';
+      return '$view $side Hand';
+    }
+
+    if (y < 0.44) {
+      return isFront ? '$view Chest' : '$view Upper Back';
+    }
+    if (y < 0.62) {
+      return isFront ? '$view Abdomen' : '$view Lower Back';
+    }
+
+    if (y < 0.78) return '$view $side Thigh';
+    if (y < 0.9) return '$view $side Leg';
+    return '$view $side Foot';
   }
 
   List<String> _normalizeImagePaths(List<String> paths) {
