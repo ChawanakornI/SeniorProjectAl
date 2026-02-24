@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -600,14 +601,24 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
                               inverse,
                               details.localPosition,
                             );
-                        final normalized = Offset(
+                        final svgNormalized = _toSvgNormalized(
+                          mappedPoint,
+                          size,
+                        );
+                        if (svgNormalized == null) return;
+
+                        final region = _mapBodyRegion(
+                          svgNormalized,
+                          _isFrontView,
+                        );
+                        if (region == null) return;
+
+                        final tapWidgetNormalized = Offset(
                           mappedPoint.dx / size.width,
                           mappedPoint.dy / size.height,
                         );
-                        final region = _mapBodyRegion(normalized, _isFrontView);
-                        if (region == null) return;
                         setState(() {
-                          _lastTapNormalized = normalized;
+                          _lastTapNormalized = tapWidgetNormalized;
                           _detectedBodyRegion = region;
                           _selectedSpecificLocation = region;
                         });
@@ -728,6 +739,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     final x = normalized.dx;
     final y = normalized.dy;
     if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+    if (!_isInsideBodySilhouette(normalized)) return null;
 
     final side = x < 0.5 ? 'Left' : 'Right';
     final view = isFront ? 'Front' : 'Back';
@@ -756,6 +768,48 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     if (y < 0.78) return '$view $side Thigh';
     if (y < 0.9) return '$view $side Leg';
     return '$view $side Foot';
+  }
+
+  Offset? _toSvgNormalized(Offset localPoint, Size viewportSize) {
+    const svgWidth = 246.0;
+    const svgHeight = 579.0;
+
+    final scale = math.min(
+      viewportSize.width / svgWidth,
+      viewportSize.height / svgHeight,
+    );
+    final drawnWidth = svgWidth * scale;
+    final drawnHeight = svgHeight * scale;
+    final dx = (viewportSize.width - drawnWidth) / 2;
+    final dy = (viewportSize.height - drawnHeight) / 2;
+
+    if (localPoint.dx < dx || localPoint.dx > dx + drawnWidth) return null;
+    if (localPoint.dy < dy || localPoint.dy > dy + drawnHeight) return null;
+
+    return Offset(
+      (localPoint.dx - dx) / drawnWidth,
+      (localPoint.dy - dy) / drawnHeight,
+    );
+  }
+
+  bool _isInsideBodySilhouette(Offset p) {
+    final x = p.dx;
+    final y = p.dy;
+    if (y < 0.02 || y > 0.995) return false;
+
+    if (y < 0.13) return x >= 0.41 && x <= 0.59; // head
+    if (y < 0.19) return x >= 0.46 && x <= 0.54; // neck
+
+    if (y < 0.62) {
+      final inTorso = x >= 0.33 && x <= 0.67;
+      final inLeftArm = x >= 0.11 && x <= 0.33 && y >= 0.22;
+      final inRightArm = x >= 0.67 && x <= 0.89 && y >= 0.22;
+      return inTorso || inLeftArm || inRightArm;
+    }
+
+    if (y < 0.78) return x >= 0.31 && x <= 0.69; // thighs
+    if (y < 0.9) return (x >= 0.37 && x <= 0.49) || (x >= 0.51 && x <= 0.63); // legs
+    return (x >= 0.32 && x <= 0.5) || (x >= 0.5 && x <= 0.68); // feet
   }
 
   List<String> _normalizeImagePaths(List<String> paths) {
