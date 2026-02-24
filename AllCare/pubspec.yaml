@@ -90,6 +90,8 @@ flutter:
     - assets/Icons/SettingIcon.svg
     - assets/Icons/NotificationIcon.svg
     - assets/Icons/google_logo.png
+    - assets/images/Front.svg
+    - assets/images/Back.svg
 
     
  
