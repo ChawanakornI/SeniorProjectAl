@@ -196,7 +196,12 @@ class PredictionService {
       return base;
     }
     return base.replace(
-      queryParameters: {...base.queryParameters, 'case_id': trimmed},
+      queryParameters: {
+        ...base.queryParameters,
+        if (caseId != null) 'case_id': caseId,
+        'predict_only': 'true',              // <-- skip save
+      },
+      
     );
   }
 }

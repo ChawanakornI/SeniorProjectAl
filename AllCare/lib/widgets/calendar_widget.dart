@@ -160,12 +160,14 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     }
   }
 
-  // Jump to today and select it
+  // Jump to today; toggle off if already selected
   void _jumpToToday() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final alreadySelected =
+        widget.selectedDate != null && _isSameDay(widget.selectedDate!, today);
     setState(() {
-      widget.onDateSelected(today);
+      widget.onDateSelected(alreadySelected ? null : today);
       _currentMonth = DateTime(today.year, today.month, 1);
       _currentWeekStart = _getWeekStart(today);
     });
@@ -527,19 +529,21 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                             child: GestureDetector(
                               onTap: () {
                                 HapticFeedback.selectionClick();
+                                final alreadySelected = widget.selectedDate != null &&
+                                    _isSameDay(widget.selectedDate!, date);
                                 setState(() {
-                                  widget.onDateSelected(date);
-                                  // If selected date is from different month, update month
-                                  if (_isMonthView &&
-                                      (date.year != _currentMonth.year ||
-                                          date.month != _currentMonth.month)) {
-                                    _currentMonth = DateTime(date.year, date.month, 1);
-                                  }
-                                  // If in week view, update week
-                                  if (!_isMonthView) {
-                                    final selectedWeekStart = _getWeekStart(date);
-                                    if (selectedWeekStart != _currentWeekStart) {
-                                      _currentWeekStart = selectedWeekStart;
+                                  widget.onDateSelected(alreadySelected ? null : date);
+                                  if (!alreadySelected) {
+                                    if (_isMonthView &&
+                                        (date.year != _currentMonth.year ||
+                                            date.month != _currentMonth.month)) {
+                                      _currentMonth = DateTime(date.year, date.month, 1);
+                                    }
+                                    if (!_isMonthView) {
+                                      final selectedWeekStart = _getWeekStart(date);
+                                      if (selectedWeekStart != _currentWeekStart) {
+                                        _currentWeekStart = selectedWeekStart;
+                                      }
                                     }
                                   }
                                 });
@@ -627,8 +631,10 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                         child: GestureDetector(
                           onTap: () {
                             HapticFeedback.selectionClick();
+                            final alreadySelected = widget.selectedDate != null &&
+                                _isSameDay(widget.selectedDate!, date);
                             setState(() {
-                              widget.onDateSelected(date);
+                              widget.onDateSelected(alreadySelected ? null : date);
                               _currentWeekStart = _getWeekStart(date);
                             });
                           },

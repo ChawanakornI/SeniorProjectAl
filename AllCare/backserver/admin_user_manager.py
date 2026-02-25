@@ -48,11 +48,12 @@ def clear_screen():
 def print_banner():
     """Print a colorful banner."""
     banner = f"""
-{Colors.BRIGHT_CYAN}╔══════════════════════════════════════════════════════════════╗
+{Colors.BRIGHT_CYAN}
+╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║          {Colors.BRIGHT_WHITE}🔐  USER MANAGEMENT ADMIN TOOL  🔐{Colors.BRIGHT_CYAN}              ║
+║              {Colors.BRIGHT_WHITE}🔐  USER MANAGEMENT ADMIN TOOL  🔐{Colors.BRIGHT_CYAN}              ║
 ║                                                              ║
-║              {Colors.DIM}Healthcare System User Manager{Colors.RESET}{Colors.BRIGHT_CYAN}                ║
+║                {Colors.DIM}Healthcare System User Manager{Colors.RESET}{Colors.BRIGHT_CYAN}                ║
 ╚══════════════════════════════════════════════════════════════╝{Colors.RESET}
 """
     print(banner)
@@ -358,7 +359,7 @@ def main():
             change_password()
         elif choice == "5":
             print(f"\n{Colors.BRIGHT_CYAN}╔{'═' * 60}╗{Colors.RESET}")
-            print(f"{Colors.BRIGHT_CYAN}║{Colors.RESET}  {Colors.BRIGHT_WHITE}Thank you for using the User Management Tool!{Colors.RESET}  {Colors.BRIGHT_CYAN}║{Colors.RESET}")
+            print(f"{Colors.BRIGHT_CYAN}║{Colors.RESET}       {Colors.BRIGHT_WHITE}Thank you for using the User Management Tool!{Colors.RESET}       {Colors.BRIGHT_CYAN}║{Colors.RESET}")
             print(f"{Colors.BRIGHT_CYAN}╚{'═' * 60}╝{Colors.RESET}\n")
             break
         else:

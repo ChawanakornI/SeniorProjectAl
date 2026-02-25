@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image
+from PIL import Image, ImageOps
 
 from . import auth
 from . import config
@@ -142,7 +142,9 @@ def get_blur_score(image):
 
 
 def _save_image(bytes_data: bytes, image_id: str, user_id: str) -> str:
-    image = Image.open(BytesIO(bytes_data)).convert("RGB")
+    image = Image.open(BytesIO(bytes_data))
+    image = ImageOps.exif_transpose(image)
+    image = image.convert("RGB")
     user_dir = _ensure_user_storage(user_id)
     dest = user_dir / f"{image_id}.jpg"
     if crypto_utils.is_encryption_enabled():
@@ -552,6 +554,7 @@ async def release_case_id(
 async def check_image(
     file: UploadFile = File(...),
     case_id: Optional[str] = None,
+    predict_only: bool = False,
     user_context: Dict[str, str] = Depends(get_user_context),
 ):
     contents = await file.read()
@@ -565,13 +568,16 @@ async def check_image(
 
     blur_score = get_blur_score(img)
     pil_image = Image.open(BytesIO(contents)).convert("RGB")
+    pil_image = ImageOps.exif_transpose(pil_image)
     predictions = model_service.predict(pil_image)
 
     image_id = str(uuid.uuid4())
     user_id = user_context["user_id"]
     user_role = user_context.get("user_role", "")
     case_id = case_id or _next_case_id_for_user(user_id)
-    _save_image(contents, image_id, user_id)
+
+    if not predict_only:
+        _save_image(contents, image_id, user_id)
 
     status = "success" if blur_score >= config.BLUR_THRESHOLD else "fail"
     message = (
@@ -580,7 +586,8 @@ async def check_image(
         else "Image processed"
     )
 
-    _append_metadata(
+    if not predict_only:
+        _append_metadata(
         {
             "case_id": case_id,
             "image_id": image_id,
