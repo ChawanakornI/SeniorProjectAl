@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -67,8 +68,10 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
   bool _isCaseIdLoading = false;
   bool _isSaving = false;
   bool _releaseRequested = false;
-  bool _releaseAfterLoad = false;
   List<String> _selectedImagePaths = [];
+
+  Completer<String?> _caseIdCompleter = Completer<String?>();
+  late final CaseService _caseService;
 
   // State for symptoms checkboxes
   final Map<String, bool> _symptoms = {
@@ -119,6 +122,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
   @override
   void initState() {
     super.initState();
+    _caseService = context.read<CaseService>();
+
     // Initialize form fields from widget parameters (for editing)
     _selectedGender = widget.initialGender;
     _selectedAge = widget.initialAge;
@@ -140,6 +145,8 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
 
     if (_caseId == null || _caseId!.isEmpty) {
       _loadCaseId();
+    } else {
+      _caseIdCompleter.complete(_caseId);
     }
 
     // Set symptoms checkboxes based on initial symptoms
@@ -173,19 +180,15 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     });
 
     try {
-      final caseId = await context.read<CaseService>().fetchNextCaseId();
-      if (_releaseAfterLoad) {
-        try {
-          await context.read<CaseService>().releaseCaseId(caseId);
-        } catch (_) {}
-        return;
-      }
+      final caseId = await _caseService.fetchNextCaseId();
+      _caseIdCompleter.complete(caseId);
       if (!mounted) return;
       setState(() {
         _caseId = caseId;
         _hashController.text = caseId;
       });
-    } catch (_) {
+    } catch (e) {
+      _caseIdCompleter.complete(null);
       if (!mounted) return;
       setState(() {
         _hashController.text = 'Error';
@@ -257,20 +260,20 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
 
   Future<void> _releaseCaseIdIfNeeded() async {
     if (widget.isEditing || _releaseRequested) return;
-
-    final caseId = _caseId;
-    if (caseId == null || caseId.isEmpty) {
-      if (_isCaseIdLoading) {
-        _releaseAfterLoad = true;
-        _releaseRequested = true;
-      }
-      return;
-    }
-
     _releaseRequested = true;
+
+    String? caseId = _caseId;
+    if (caseId == null || caseId.isEmpty) {
+      caseId = await _caseIdCompleter.future;
+    }
+    if (caseId == null || caseId.isEmpty) return;
+
     try {
-      await context.read<CaseService>().releaseCaseId(caseId);
-    } catch (_) {}
+      await _caseService.releaseCaseId(caseId);
+      log('Released case ID $caseId', name: 'NewCaseScreen');
+    } catch (e) {
+      log('Failed to release case ID $caseId: $e', name: 'NewCaseScreen');
+    }
   }
 
   Future<void> _handleCancel() async {
@@ -310,10 +313,148 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     
   }
 
-  void _handlePopInvokedWithResult(bool didPop, Object? result) {
-    if (didPop) {
-      _releaseCaseIdIfNeeded();
+  Future<void> _handlePopInvokedWithResult(bool didPop, Object? result) async {
+    if (didPop) return;
+    final shouldLeave = await _showLeaveConfirmDialog();
+    if (shouldLeave && mounted) {
+      await _handleCancel();
     }
+  }
+
+  Future<bool> _showLeaveConfirmDialog() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor:
+          const Color.fromARGB(255, 223, 223, 223).withValues(alpha: 0.25),
+      builder: (dialogContext) {
+        return Stack(
+          children: [
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(color: Colors.transparent),
+            ),
+            Center(
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      padding: const EdgeInsets.all(22),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF282828)
+                            : Colors.white.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.45 : 0.25,
+                            ),
+                            blurRadius: 30,
+                            offset: const Offset(0, 15),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 42,
+                            color: isDark
+                                ? const Color(0xFFFBFBFB)
+                                : const Color(0xFF282828),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            'Leave this page?',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF282828),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Unsaved changes will be lost.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: isDark
+                                  ? const Color(0xFFB8B8B8)
+                                  : const Color(0xFF6B6B6B),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () =>
+                                      Navigator.of(dialogContext).pop(false),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isDark
+                                        ? const Color(0xFF1F1F1F)
+                                        : Colors.black,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Stay',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () =>
+                                      Navigator.of(dialogContext).pop(true),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Leave',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    return result == true;
   }
 
   @override
@@ -321,6 +462,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return PopScope(
+      canPop: false,
       onPopInvokedWithResult: _handlePopInvokedWithResult,
       child: Scaffold(
         extendBodyBehindAppBar: true,
@@ -466,7 +608,12 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
             elevation: 0,
             leading: BackButton(
               color: isDark ? Colors.white : Colors.black,
-              onPressed: _handleCancel,
+              onPressed: () async {
+                final shouldLeave = await _showLeaveConfirmDialog();
+                if (shouldLeave && mounted) {
+                  await _handleCancel();
+                }
+              },
             ),
             flexibleSpace: ClipRRect(
               child: BackdropFilter(
@@ -950,7 +1097,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
   }
 
   Future<void> _editImages() async {
-    final result = await showDialog<List<String>>(
+    final dialogResult = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
       barrierColor:
@@ -975,6 +1122,7 @@ class _NewCaseScreenState extends State<NewCaseScreen> {
       },
     );
 
+    final result = dialogResult?['images']?.cast<String>();
     if (!mounted || result == null) return;
     setState(() {
       _selectedImagePaths = _normalizeImagePaths(result);

@@ -7,15 +7,34 @@ import 'api_config.dart';
 import '../../app_state.dart';
 
 /// Service for getting ML predictions from the backend server.
-/// 
+///
 /// This service calls the FastAPI backend's /check-image endpoint
 class PredictionService {
   PredictionService(this._appState);
 
   final AppState _appState;
 
+  bool _isNetworkPath(String path) {
+    final lower = path.toLowerCase();
+    return lower.startsWith('http://') || lower.startsWith('https://');
+  }
+
+  bool _isBackendRelativePath(String path) {
+    if (path.isEmpty) return false;
+    if (_isNetworkPath(path)) return false;
+    if (path.startsWith('/')) return false;
+    return path.contains('/') && !path.contains('\\');
+  }
+
+  String _resolveUploadPath(String imagePath) {
+    if (_isBackendRelativePath(imagePath)) {
+      return '${ApiConfig.baseUrl}/images/$imagePath';
+    }
+    return imagePath;
+  }
+
   /// Predict skin lesion classification for a single image.
-  /// 
+  ///
   /// Calls the backend /check-image endpoint and returns the predictions.
   /// Returns a list of predictions sorted by confidence (highest first).
   Future<Map<String, dynamic>> predictSingle(
@@ -23,41 +42,71 @@ class PredictionService {
     String? caseId,
   }) async {
     log('Starting prediction for image: $imagePath', name: 'PredictionService');
-    log('Using API endpoint: ${ApiConfig.checkImageUri}', name: 'PredictionService');
+    log(
+      'Using API endpoint: ${ApiConfig.checkImageUri}',
+      name: 'PredictionService',
+    );
 
     try {
       final uri = _buildCheckUri(caseId);
-      
+      final uploadPath = _resolveUploadPath(imagePath);
+      final headers = ApiConfig.buildHeaders(
+        token: _appState.accessToken,
+        userId: _appState.userId,
+        userRole: _appState.userRole,
+      );
+
       // Create multipart request
       final request = http.MultipartRequest('POST', uri);
-      request.files.add(await http.MultipartFile.fromPath('file', imagePath));
-      
-      request.headers.addAll(
-        ApiConfig.buildHeaders(
-          token: _appState.accessToken,
-          userId: _appState.userId,
-          userRole: _appState.userRole,
-        ),
-      );
+      if (_isNetworkPath(uploadPath)) {
+        final fetchResponse = await http
+            .get(Uri.parse(uploadPath), headers: headers)
+            .timeout(const Duration(seconds: 30));
+        if (fetchResponse.statusCode != 200) {
+          throw Exception(
+            'Failed to fetch image for prediction: HTTP ${fetchResponse.statusCode}',
+          );
+        }
+        final fileName =
+            Uri.parse(uploadPath).pathSegments.isNotEmpty
+                ? Uri.parse(uploadPath).pathSegments.last
+                : 'image.jpg';
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            fetchResponse.bodyBytes,
+            filename: fileName,
+          ),
+        );
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromPath('file', uploadPath),
+        );
+      }
+
+      request.headers.addAll(headers);
 
       // Send request with timeout
       final streamedResponse = await request.send().timeout(
         const Duration(seconds: 30),
         onTimeout: () {
-          throw Exception('Request timed out. Check if the server is running at ${ApiConfig.baseUrl}');
+          throw Exception(
+            'Request timed out. Check if the server is running at ${ApiConfig.baseUrl}',
+          );
         },
       );
-      
+
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body) as Map<String, dynamic>;
         log('Server response: $jsonResponse', name: 'PredictionService');
-        
+
         // Extract predictions from response
-        final predictions = (jsonResponse['predictions'] as List<dynamic>? ?? [])
-            .map((p) => p as Map<String, dynamic>)
-            .toList();
+        final predictions =
+            (jsonResponse['predictions'] as List<dynamic>? ?? [])
+                .map((p) => p as Map<String, dynamic>)
+                .toList();
 
         return {
           'status': jsonResponse['status'],
@@ -68,17 +117,23 @@ class PredictionService {
           'case_id': jsonResponse['case_id'],
         };
       } else {
-        log('Server error: ${response.statusCode} - ${response.body}', name: 'PredictionService');
+        log(
+          'Server error: ${response.statusCode} - ${response.body}',
+          name: 'PredictionService',
+        );
         throw Exception('Server error: ${response.statusCode}');
       }
     } on SocketException catch (e) {
       log('Network error: $e', name: 'PredictionService');
-      throw Exception('Cannot connect to server at ${ApiConfig.baseUrl}. Check if the server is running and the IP address is correct.');
+      throw Exception(
+        'Cannot connect to server at ${ApiConfig.baseUrl}. Check if the server is running and the IP address is correct.',
+      );
     } catch (e) {
       log('Prediction error: $e', name: 'PredictionService');
       rethrow;
     }
   }
+
   /// Legacy method for compatibility - extracts just the predictions list
   Future<List<Map<String, dynamic>>> predict(String imagePath) async {
     final result = await predictSingle(imagePath);
@@ -98,11 +153,12 @@ class PredictionService {
       throw Exception('No images provided for prediction');
     }
 
-    final index = (selectedIndex != null &&
-            selectedIndex >= 0 &&
-            selectedIndex < imagePaths.length)
-        ? selectedIndex
-        : 0;
+    final index =
+        (selectedIndex != null &&
+                selectedIndex >= 0 &&
+                selectedIndex < imagePaths.length)
+            ? selectedIndex
+            : 0;
 
     final selectedPath = imagePaths[index];
     log(
@@ -114,10 +170,7 @@ class PredictionService {
     final result = await predictSingle(selectedPath, caseId: caseId);
 
     onProgress?.call(1, 1);
-    return {
-      ...result,
-      'selected_prediction_index': index,
-    };
+    return {...result, 'selected_prediction_index': index};
   }
 
   /*
@@ -179,9 +232,9 @@ class PredictionService {
   /// Check if the backend server is reachable
   Future<bool> checkHealth() async {
     try {
-      final response = await http.get(ApiConfig.healthUri).timeout(
-        const Duration(seconds: 5),
-      );
+      final response = await http
+          .get(ApiConfig.healthUri)
+          .timeout(const Duration(seconds: 5));
       return response.statusCode == 200;
     } catch (e) {
       log('Health check failed: $e', name: 'PredictionService');
@@ -199,9 +252,8 @@ class PredictionService {
       queryParameters: {
         ...base.queryParameters,
         if (caseId != null) 'case_id': caseId,
-        'predict_only': 'true',              // <-- skip save
+        'predict_only': 'true', // <-- skip save
       },
-      
     );
   }
 }

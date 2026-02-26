@@ -1,10 +1,12 @@
 import 'dart:convert'; // สำหรับ jsonDecode
 import 'dart:developer';
 import 'dart:io'; // สำหรับ Platform check
+import 'dart:math' show max, min;
 // สำหรับ File operations
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http; // Import http
+import 'package:image/image.dart' as img;
 import 'package:provider/provider.dart';
 import 'api_config.dart'; // Shared API configuration
 import 'camera_globals.dart'; // Import เพื่อเรียกใช้ตัวแปร 'cameras'
@@ -26,6 +28,8 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen> {
   CameraController? _controller;
   Future<void>? _initializeControllerFuture;
+  static const double _guideHoleSize = 250;
+  static const double _guideBorderStroke = 2;
 
   // สถานะเริ่มต้น
   final CameraStatus _currentStatus = CameraStatus.good;
@@ -34,6 +38,19 @@ class _CameraScreenState extends State<CameraScreen> {
   // Multi-image support
   final List<String> _takenImages = [];
   final int _maxImages = 8;
+
+  int _safePredictionIndex(int? index) {
+    if (_takenImages.isEmpty) return 0;
+    final i = index ?? 0;
+    return i.clamp(0, _takenImages.length - 1);
+  }
+
+  void _returnCapturedImages({int? predictionIndex}) {
+    Navigator.of(context).pop({
+      'images': List<String>.from(_takenImages),
+      'predictionIndex': _safePredictionIndex(predictionIndex),
+    });
+  }
 
   @override
   void initState() {
@@ -68,11 +85,7 @@ class _CameraScreenState extends State<CameraScreen> {
         })
         .catchError((Object e) {
           if (e is CameraException) {
-            log(
-              'Camera Error: ${e.code}',
-              name: 'CameraScreen',
-              error: e,
-            );
+            log('Camera Error: ${e.code}', name: 'CameraScreen', error: e);
           }
         });
   }
@@ -102,10 +115,10 @@ class _CameraScreenState extends State<CameraScreen> {
         name: 'CameraScreen',
       );
 
+      final appState = context.read<AppState>();
       var request = http.MultipartRequest('POST', uri);
       request.files.add(await http.MultipartFile.fromPath('file', imagePath));
 
-      final appState = context.read<AppState>();
       request.headers.addAll(
         ApiConfig.buildHeaders(
           userId: appState.userId,
@@ -247,8 +260,7 @@ class _CameraScreenState extends State<CameraScreen> {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
-        final isDark =
-      Theme.of(dialogContext).brightness == Brightness.dark;
+        final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
         return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
@@ -298,7 +310,12 @@ class _CameraScreenState extends State<CameraScreen> {
                   'What would you like to do next?',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Color.fromARGB(255, 145, 145, 145), // Colors.grey[600]
+                    color: Color.fromARGB(
+                      255,
+                      145,
+                      145,
+                      145,
+                    ), // Colors.grey[600]
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -381,6 +398,107 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 
+  Rect _buildGuideRect(Size previewSize) {
+    final side = min(
+      _guideHoleSize,
+      min(previewSize.width, previewSize.height),
+    );
+    return Rect.fromCenter(
+      center: previewSize.center(Offset.zero),
+      width: side,
+      height: side,
+    );
+  }
+
+  Rect _mapGuideRectToImage({
+    required Rect guideRect,
+    required Size previewSize,
+    required int imageWidth,
+    required int imageHeight,
+  }) {
+    final srcW = imageWidth.toDouble();
+    final srcH = imageHeight.toDouble();
+
+    // Camera preview behaves like BoxFit.cover: keep aspect ratio and crop overflow.
+    final scale = max(previewSize.width / srcW, previewSize.height / srcH);
+    final renderedW = srcW * scale;
+    final renderedH = srcH * scale;
+    final offsetX = (previewSize.width - renderedW) / 2;
+    final offsetY = (previewSize.height - renderedH) / 2;
+
+    double mapX(double x) => (x - offsetX) / scale;
+    double mapY(double y) => (y - offsetY) / scale;
+
+    final left = mapX(guideRect.left).clamp(0.0, srcW);
+    final top = mapY(guideRect.top).clamp(0.0, srcH);
+    final right = mapX(guideRect.right).clamp(0.0, srcW);
+    final bottom = mapY(guideRect.bottom).clamp(0.0, srcH);
+
+    final mappedWidth = (right - left).abs();
+    final mappedHeight = (bottom - top).abs();
+    final side = min(mappedWidth, mappedHeight);
+
+    final centerX = (left + right) / 2;
+    final centerY = (top + bottom) / 2;
+    final squareLeft = (centerX - side / 2).clamp(0.0, srcW - side);
+    final squareTop = (centerY - side / 2).clamp(0.0, srcH - side);
+
+    return Rect.fromLTWH(squareLeft, squareTop, side, side);
+  }
+
+  /// Crops the image at [path] to match the on-screen green guide square.
+  /// Writes to a NEW file (avoids iOS file-cache serving stale bytes).
+  /// Returns the new path, or null on failure.
+  Future<String?> _cropToGuideSquare(
+    String path, {
+    required Size previewSize,
+  }) async {
+    try {
+      final bytes = await File(path).readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) {
+        debugPrint('[cropToGuideSquare] decodeImage returned null for: $path');
+        return null;
+      }
+
+      final oriented = img.bakeOrientation(decoded);
+      final guideRect = _buildGuideRect(previewSize);
+      final cropRect = _mapGuideRectToImage(
+        guideRect: guideRect,
+        previewSize: previewSize,
+        imageWidth: oriented.width,
+        imageHeight: oriented.height,
+      );
+
+      final x = cropRect.left.round().clamp(0, oriented.width - 1);
+      final y = cropRect.top.round().clamp(0, oriented.height - 1);
+      final maxSide = min(oriented.width - x, oriented.height - y);
+      final side = cropRect.width.round().clamp(1, maxSide).toInt();
+      final cropped = img.copyCrop(
+        oriented,
+        x: x,
+        y: y,
+        width: side,
+        height: side,
+      );
+      final encoded = img.encodeJpg(cropped, quality: 92);
+
+      // Write to a NEW path so FileImage never sees stale OS-cached bytes
+      final dot = path.lastIndexOf('.');
+      final newPath = '${dot > 0 ? path.substring(0, dot) : path}_guide_sq.jpg';
+      await File(newPath).writeAsBytes(encoded, flush: true);
+
+      debugPrint(
+        '[cropToGuideSquare] ${oriented.width}x${oriented.height} -> '
+        '$side x $side at ($x,$y), guide=$guideRect, mapped=$cropRect : $newPath',
+      );
+      return newPath;
+    } catch (e, st) {
+      debugPrint('[cropToGuideSquare] FAILED: $e\n$st');
+      return null;
+    }
+  }
+
   // --- 3. ฟังก์ชันถ่ายรูป (แก้ไขให้เชื่อมโยงกัน) ---
   Future<void> _takePicture() async {
     if (_isTakingPicture ||
@@ -402,6 +520,7 @@ class _CameraScreenState extends State<CameraScreen> {
     });
 
     try {
+      final previewSize = MediaQuery.sizeOf(context);
       await _initializeControllerFuture;
 
       // 3.1 ถ่ายรูป
@@ -409,12 +528,24 @@ class _CameraScreenState extends State<CameraScreen> {
 
       if (!mounted) return;
 
-      // 3.2 ส่งรูปไปเช็คกับ FastAPI
-      final result = await _checkImageWithPython(image.path);
+      // 3.1.5 Crop to the on-screen guide square (new file avoids iOS file-cache)
+      final imagePath =
+          await _cropToGuideSquare(image.path, previewSize: previewSize) ??
+          image.path;
+
+      // 3.2 ส่งรูปไปเช็คกับ FastAPI (now receives the cropped image)
+      final result = await _checkImageWithPython(imagePath);
 
       if (result != null && result['status'] == 'success') {
-        // Add image to collection
-        _takenImages.add(image.path);
+        // Use backend-relative path (user_id/image_id.jpg) so downstream
+        // screens load from backend storage, not local device storage.
+        final userId = result['user_id'] as String?;
+        final imageId = result['image_id'] as String?;
+        final backendPath =
+            (userId != null && imageId != null)
+                ? '$userId/$imageId.jpg'
+                : imagePath;
+        _takenImages.add(backendPath);
 
         // Show multi-image options
         final action = await _showMultiImageOptions();
@@ -426,25 +557,34 @@ class _CameraScreenState extends State<CameraScreen> {
           case 'save':
             // Save current images and return to add_photo
             if (!mounted) return;
-            Navigator.of(context).pop(_takenImages);
+            _returnCapturedImages(predictionIndex: _takenImages.length - 1);
             break;
           case 'preview':
             // Show preview of all images
             if (!mounted) return;
-            final shouldSave = await Navigator.of(context).push(
+            final previewResult = await Navigator.of(context).push(
               MaterialPageRoute(
                 builder:
                     (context) => PhotoPreviewScreen(
                       imagePath: _takenImages.last, // Show the last taken image
+                      imagePaths: _takenImages,
                       caseId: result['case_id'] as String?,
                       isMultiImage: true,
                       imageCount: _takenImages.length,
                     ),
               ),
             );
-            if (shouldSave == true) {
+            final confirmed =
+                previewResult == true ||
+                (previewResult is Map && previewResult['confirmed'] == true);
+            if (confirmed) {
+              int? predictionIndex;
+              if (previewResult is Map &&
+                  previewResult['predictionIndex'] is int) {
+                predictionIndex = previewResult['predictionIndex'] as int;
+              }
               if (!mounted) return;
-              Navigator.of(context).pop(_takenImages);
+              _returnCapturedImages(predictionIndex: predictionIndex);
             }
             break;
         }
@@ -523,10 +663,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   Platform.isMacOS
                       ? 'The camera plugin does not support macOS.\nPlease use "Choose from Gallery" instead.'
                       : 'No cameras found on this device.',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
-                  ),
+                  style: const TextStyle(color: Colors.white70, fontSize: 16),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
@@ -572,7 +709,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 Positioned.fill(
                   child: CustomPaint(
                     painter: _CameraMaskPainter(
-                      holeSize: 250,
+                      holeSize: _guideHoleSize,
                       borderRadius: 12,
                       overlayColor: Colors.black54,
                     ),
@@ -658,12 +795,15 @@ class _CameraScreenState extends State<CameraScreen> {
                       child: Center(
                         // Border around the hole
                         child: Container(
-                          height: 254,
-                          width: 254,
+                          height: _guideHoleSize + (_guideBorderStroke * 2),
+                          width: _guideHoleSize + (_guideBorderStroke * 2),
                           decoration: BoxDecoration(
                             color: Colors.transparent,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: statusColor, width: 2),
+                            border: Border.all(
+                              color: statusColor,
+                              width: _guideBorderStroke,
+                            ),
                           ),
                         ),
                       ),

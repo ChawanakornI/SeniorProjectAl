@@ -241,6 +241,166 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
+  Future<void> _handlePopInvokedWithResult(bool didPop, Object? result) async {
+    if (didPop) return;
+    final shouldLeave = await _showLeaveConfirmDialog();
+    if (shouldLeave && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<bool> _showLeaveConfirmDialog() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: const Color.fromARGB(
+        255,
+        223,
+        223,
+        223,
+      ).withValues(alpha: 0.25),
+      builder: (dialogContext) {
+        return Stack(
+          children: [
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(color: Colors.transparent),
+            ),
+            Center(
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      padding: const EdgeInsets.all(22),
+                      decoration: BoxDecoration(
+                        color:
+                            isDark
+                                ? const Color(0xFF282828)
+                                : Colors.white.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.45 : 0.25,
+                            ),
+                            blurRadius: 30,
+                            offset: const Offset(0, 15),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 42,
+                            color:
+                                isDark
+                                    ? const Color(0xFFFBFBFB)
+                                    : const Color(0xFF282828),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            'Leave without saving?',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  isDark
+                                      ? Colors.white
+                                      : const Color(0xFF282828),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Your decision has not been recorded yet.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color:
+                                  isDark
+                                      ? const Color(0xFFB8B8B8)
+                                      : const Color(0xFF6B6B6B),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed:
+                                      () => Navigator.of(
+                                        dialogContext,
+                                      ).pop(false),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        isDark
+                                            ? const Color(0xFF1F1F1F)
+                                            : Colors.black,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Stay',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed:
+                                      () =>
+                                          Navigator.of(dialogContext).pop(true),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Leave',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    return result == true;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -274,95 +434,104 @@ class _ResultScreenState extends State<ResultScreen> {
             ? GradientScheme.red
             : GradientScheme.blue;
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: isDark ? Colors.white : Colors.black,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _handlePopInvokedWithResult,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: Icon(
+              Icons.arrow_back,
+              color: isDark ? Colors.white : Colors.black,
+            ),
+            onPressed: () async {
+              final shouldLeave = await _showLeaveConfirmDialog();
+              if (shouldLeave && mounted) {
+                Navigator.of(context).pop();
+              }
+            },
           ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          'Result',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-            color: isDark ? Colors.white : Colors.black,
+          title: Text(
+            'Result',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              color: isDark ? Colors.white : Colors.black,
+            ),
           ),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        flexibleSpace: ClipRRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              color: (isDark ? Colors.black : Colors.white).withValues(
-                alpha: 0.5,
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          flexibleSpace: ClipRRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                color: (isDark ? Colors.black : Colors.white).withValues(
+                  alpha: 0.5,
+                ),
               ),
             ),
           ),
         ),
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: gradientColors,
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: gradientColors,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Result',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black,
+          child: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Result',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'The AI model has analyzed your skin image and generated a prediction result. Please review the details below.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isDark ? Colors.white70 : Colors.grey[600],
+                        const SizedBox(height: 8),
+                        Text(
+                          'The AI model has analyzed your skin image and generated a prediction result. Please review the details below.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDark ? Colors.white70 : Colors.grey[600],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-                      _buildMainPredictionBanner(
-                        isDark: isDark,
-                        label: topLabel,
-                        confidence: topConfidence,
-                        riskLevel: riskLevel,
-                        predictions: currentPredictions,
-                        scheme: scheme,
-                      ),
-                      const SizedBox(height: 20),
+                        _buildMainPredictionBanner(
+                          isDark: isDark,
+                          label: topLabel,
+                          confidence: topConfidence,
+                          riskLevel: riskLevel,
+                          predictions: currentPredictions,
+                          scheme: scheme,
+                        ),
+                        const SizedBox(height: 20),
 
-                      _buildImageDecisionsSection(isDark),
-                      const SizedBox(height: 20),
+                        _buildImageDecisionsSection(isDark),
+                        const SizedBox(height: 20),
 
-                      _buildRecommendedSection(isDark, riskLevel),
-                      const SizedBox(height: 20),
-                    ],
+                        _buildRecommendedSection(isDark, riskLevel),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              _buildBottomButtons(isDark),
-            ],
+                _buildBottomButtons(isDark),
+              ],
+            ),
           ),
         ),
       ),
@@ -1090,7 +1259,12 @@ class _ResultScreenState extends State<ResultScreen> {
                         imageDecisions: _decisionPayload(),
                         selectedPredictionIndex: widget.selectedPredictionIndex,
                       );
-                    } catch (_) {}
+                    } catch (e) {
+                      if (mounted) {
+                        _showActionSnack('Failed to save uncertain case: $e');
+                      }
+                      return;
+                    }
                     if (mounted) Navigator.of(context).pop('pending');
                   },
                   style: OutlinedButton.styleFrom(
@@ -1126,7 +1300,12 @@ class _ResultScreenState extends State<ResultScreen> {
                         imageDecisions: _decisionPayload(),
                         selectedPredictionIndex: widget.selectedPredictionIndex,
                       );
-                    } catch (_) {}
+                    } catch (e) {
+                      if (mounted) {
+                        _showActionSnack('Failed to save confirmed case: $e');
+                      }
+                      return;
+                    }
                     if (mounted) Navigator.of(context).pop('Confirmed');
                   },
                   style: ElevatedButton.styleFrom(

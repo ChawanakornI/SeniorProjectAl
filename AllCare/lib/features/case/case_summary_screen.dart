@@ -27,7 +27,8 @@ class CaseSummaryScreen extends StatefulWidget {
   final int? imageCount;
   final String? aggregationInfo;
   final bool isPrePrediction; // NEW: Flag to show Edit/Run Prediction buttons
-  final int predictIndex; // Index of image to use for prediction (from carousel)
+  final int
+  predictIndex; // Index of image to use for prediction (from carousel)
 
   const CaseSummaryScreen({
     super.key,
@@ -69,7 +70,7 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
   // Get all image paths (deduplicated)
   List<String> get _allImagePaths {
     final uniquePaths = <String>{};
-    
+
     // Add paths from imagePaths list
     for (final p in widget.imagePaths) {
       final trimmed = p.trim();
@@ -127,9 +128,10 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
     super.initState();
     // Start carousel at a safe selected prediction index.
     final imageCount = _allImagePaths.length;
-    final safeIndex = imageCount == 0
-        ? 0
-        : widget.predictIndex.clamp(0, imageCount - 1).toInt();
+    final safeIndex =
+        imageCount == 0
+            ? 0
+            : widget.predictIndex.clamp(0, imageCount - 1).toInt();
     _currentImageIndex = safeIndex;
     _imagePageController = PageController(initialPage: safeIndex);
     _fallbackCreatedAt = DateTime.now().toIso8601String();
@@ -139,6 +141,168 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
   void dispose() {
     _imagePageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handlePopInvokedWithResult(bool didPop, Object? result) async {
+    if (didPop) return;
+    final shouldLeave = await _showLeaveConfirmDialog();
+    if (shouldLeave && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<bool> _showLeaveConfirmDialog() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: const Color.fromARGB(
+        255,
+        223,
+        223,
+        223,
+      ).withValues(alpha: 0.25),
+      builder: (dialogContext) {
+        return Stack(
+          children: [
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(color: Colors.transparent),
+            ),
+            Center(
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      padding: const EdgeInsets.all(22),
+                      decoration: BoxDecoration(
+                        color:
+                            isDark
+                                ? const Color(0xFF282828)
+                                : Colors.white.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.45 : 0.25,
+                            ),
+                            blurRadius: 30,
+                            offset: const Offset(0, 15),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 42,
+                            color:
+                                isDark
+                                    ? const Color(0xFFFBFBFB)
+                                    : const Color(0xFF282828),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            'Leave case summary?',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  isDark
+                                      ? Colors.white
+                                      : const Color(0xFF282828),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            widget.isPrePrediction
+                                ? 'Your unsaved progress will be lost.'
+                                : 'Are you sure you want to go back?',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color:
+                                  isDark
+                                      ? const Color(0xFFB8B8B8)
+                                      : const Color(0xFF6B6B6B),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed:
+                                      () => Navigator.of(
+                                        dialogContext,
+                                      ).pop(false),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        isDark
+                                            ? const Color(0xFF1F1F1F)
+                                            : Colors.black,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Stay',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed:
+                                      () =>
+                                          Navigator.of(dialogContext).pop(true),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Leave',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    return result == true;
   }
 
   /// Run ML prediction and navigate to Result screen
@@ -305,11 +469,9 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
       final safeIndex =
           _currentImageIndex < _allImagePaths.length ? _currentImageIndex : 0;
       final selectedPath = _allImagePaths[safeIndex];
-      final predictionResult =
-          await context.read<PredictionService>().predictSingle(
-                selectedPath,
-                caseId: widget.caseId,
-              );
+      final predictionResult = await context
+          .read<PredictionService>()
+          .predictSingle(selectedPath, caseId: widget.caseId);
       final predictions =
           (predictionResult['predictions'] as List<dynamic>? ?? [])
               .map((p) => p as Map<String, dynamic>)
@@ -367,602 +529,670 @@ class _CaseSummaryScreenState extends State<CaseSummaryScreen> {
         widget.predictions.isNotEmpty ? widget.predictions.first : null;
     final diagnosticPaths = _allImagePaths;
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: Stack(
-          children: [
-            Container(
-              height: kToolbarHeight,
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.18),
-                    blurRadius: 24,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
-              ),
-            ),
-            AppBar(
-              leading: IconButton(
-                icon: Icon(
-                  Icons.arrow_back,
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-                onPressed: () => Navigator.pop(context),
-              ),
-              title: Text(
-                'Case Summary',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-              ),
-              centerTitle: true,
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              flexibleSpace: ClipRRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: Container(
-                    color:
-                        isDark
-                            ? Colors.black.withValues(alpha: 0.45)
-                            : const Color(0xFFFBFBFB),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-
-      body: Container(
-        color:
-            isDark
-                ? const Color.fromARGB(255, 0, 0, 0)
-                : const Color(0xFFFBFBFB),
-
-        child: SafeArea(
-          child: Column(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _handlePopInvokedWithResult,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(kToolbarHeight),
+          child: Stack(
             children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 1. Status Banner
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: (widget.isPrePrediction
-                                    ? Colors.blue
-                                    : Colors.green)
-                                .withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
+              Container(
+                height: kToolbarHeight,
+                decoration: BoxDecoration(
+                  color: Colors.transparent,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.45 : 0.18,
+                      ),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+              ),
+              AppBar(
+                leading: IconButton(
+                  icon: Icon(
+                    Icons.arrow_back,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                  onPressed: () async {
+                    final navigator = Navigator.of(context);
+                    final shouldLeave = await _showLeaveConfirmDialog();
+                    if (shouldLeave && mounted) {
+                      navigator.pop();
+                    }
+                  },
+                ),
+                title: Text(
+                  'Case Summary',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                centerTitle: true,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                flexibleSpace: ClipRRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
+                      color:
+                          isDark
+                              ? Colors.black.withValues(alpha: 0.45)
+                              : const Color(0xFFFBFBFB),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        body: Container(
+          color:
+              isDark
+                  ? const Color.fromARGB(255, 0, 0, 0)
+                  : const Color(0xFFFBFBFB),
+
+          child: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. Status Banner
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
                               color: (widget.isPrePrediction
                                       ? Colors.blue
                                       : Colors.green)
-                                  .withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                widget.isPrePrediction
-                                    ? Icons.save
-                                    : Icons.check_circle,
-                                color:
-                                    widget.isPrePrediction
+                                  .withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: (widget.isPrePrediction
                                         ? Colors.blue
-                                        : Colors.green,
+                                        : Colors.green)
+                                    .withValues(alpha: 0.3),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                widget.isPrePrediction
-                                    ? 'Images Saved'
-                                    : 'Case Recorded Successfully',
-                                style: TextStyle(
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  widget.isPrePrediction
+                                      ? Icons.save
+                                      : Icons.check_circle,
                                   color:
                                       widget.isPrePrediction
                                           ? Colors.blue
                                           : Colors.green,
-                                  fontWeight: FontWeight.bold,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // 2. Main Details Card
-                      _buildGlassCard(
-                        isDark: isDark,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
+                                const SizedBox(width: 8),
                                 Text(
-                                  'Case ID',
+                                  widget.isPrePrediction
+                                      ? 'Images Saved'
+                                      : 'Case Recorded Successfully',
                                   style: TextStyle(
                                     color:
-                                        isDark
-                                            ? Colors.white54
-                                            : Colors.grey[600],
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                Text(
-                                  widget.caseId,
-                                  style: TextStyle(
-                                    color: isDark ? Colors.white : Colors.black,
+                                        widget.isPrePrediction
+                                            ? Colors.blue
+                                            : Colors.green,
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 16,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildDetailItem(
-                                    isDark,
-                                    'Created at',
-                                    createdAtText,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _buildDetailItem(
-                                    isDark,
-                                    'Last updated',
-                                    updatedAtText,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const Divider(height: 24),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildDetailItem(
-                                    isDark,
-                                    'Gender',
-                                    widget.gender ?? '-',
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _buildDetailItem(
-                                    isDark,
-                                    'Age',
-                                    widget.age ?? '-',
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _buildDetailItem(
-                                    isDark,
-                                    'Location',
-                                    widget.location ?? '-',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 24),
 
-                      // 3. Image Card
-                      _buildGlassCard(
-                        isDark: isDark,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Diagnostic Image',
-                                  style: TextStyle(
-                                    color: isDark ? Colors.white : Colors.black,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                if (diagnosticPaths.length > 1)
-                                  Text(
-                                    '${diagnosticPaths.length} images',
-                                    style: TextStyle(
-                                      color:
-                                          isDark
-                                              ? Colors.white60
-                                              : Colors.grey[600],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            // Swipeable image carousel
-                            if (diagnosticPaths.isNotEmpty)
-                              Column(
-                                children: [
-                                  SizedBox(
-                                    height: 220,
-                                    child: Stack(
-                                      children: [
-                                        PageView.builder(
-                                          controller: _imagePageController,
-                                          itemCount: diagnosticPaths.length,
-                                          onPageChanged: (index) {
-                                            setState(
-                                              () => _currentImageIndex = index,
-                                            );
-                                          },
-                                          itemBuilder: (context, index) {
-                                            // Show badge on currently viewed image (will be used for prediction)
-                                            final isSelectedForPrediction = index == _currentImageIndex;
-                                            return Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 4,
-                                                  ),
-                                              child: Stack(
-                                                children: [
-                                                  ClipRRect(
-                                                    borderRadius:
-                                                        BorderRadius.circular(12),
-                                                    child: _buildDiagnosticImage(
-                                                      diagnosticPaths[index],
-                                                      isDark,
-                                                    ),
-                                                  ),
-                                                  // "Selected for Prediction" badge
-                                                  if (isSelectedForPrediction)
-                                                    Positioned(
-                                                      bottom: 12,
-                                                      left: 0,
-                                                      right: 0,
-                                                      child: Center(
-                                                        child: ClipRRect(
-                                                          borderRadius: BorderRadius.circular(16),
-                                                          child: BackdropFilter(
-                                                            filter: ImageFilter.blur(
-                                                              sigmaX: 8,
-                                                              sigmaY: 8,
-                                                            ),
-                                                            child: Container(
-                                                              padding: const EdgeInsets.symmetric(
-                                                                horizontal: 12,
-                                                                vertical: 6,
-                                                              ),
-                                                              decoration: BoxDecoration(
-                                                                color: Colors.blue.withValues(alpha: 0.7),
-                                                                borderRadius: BorderRadius.circular(16),
-                                                                border: Border.all(
-                                                                  color: Colors.white.withValues(alpha: 0.3),
-                                                                  width: 1,
-                                                                ),
-                                                              ),
-                                                              child: const Row(
-                                                                mainAxisSize: MainAxisSize.min,
-                                                                children: [
-                                                                  Icon(
-                                                                    Icons.check_circle,
-                                                                    color: Colors.white,
-                                                                    size: 14,
-                                                                  ),
-                                                                  SizedBox(width: 6),
-                                                                  Text(
-                                                                    'Selected for Prediction',
-                                                                    style: TextStyle(
-                                                                      color: Colors.white,
-                                                                      fontSize: 11,
-                                                                      fontWeight: FontWeight.w600,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        // Image counter overlay (only for multiple images)
-                                        if (diagnosticPaths.length > 1)
-                                          Positioned(
-                                            top: 12,
-                                            right: 12,
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                              child: BackdropFilter(
-                                                filter: ImageFilter.blur(
-                                                  sigmaX: 8,
-                                                  sigmaY: 8,
-                                                ),
-                                                child: Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 12,
-                                                        vertical: 6,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.black
-                                                        .withValues(alpha: 0.5),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          16,
-                                                        ),
-                                                  ),
-                                                  child: Text(
-                                                    '${_currentImageIndex + 1} / ${diagnosticPaths.length}',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  // Page indicator dots (only for multiple images)
-                                  if (diagnosticPaths.length > 1) ...[
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: List.generate(
-                                        diagnosticPaths.length,
-                                        (index) {
-                                          final isActive =
-                                              index == _currentImageIndex;
-                                          // The current image is the one that will be used for prediction
-                                          final isPredictIndex =
-                                              index == _currentImageIndex;
-                                          return AnimatedContainer(
-                                            duration: const Duration(
-                                              milliseconds: 200,
-                                            ),
-                                            margin: const EdgeInsets.symmetric(
-                                              horizontal: 3,
-                                            ),
-                                            width: isActive ? 20 : 6,
-                                            height: 6,
-                                            decoration: BoxDecoration(
-                                              borderRadius:
-                                                  BorderRadius.circular(3),
-                                              color: isActive
-                                                  ? (isPredictIndex
-                                                      ? Colors.green[500]
-                                                      : (isDark
-                                                          ? Colors.blue[400]
-                                                          : Colors.blue[600]))
-                                                  : (isPredictIndex
-                                                      ? Colors.green[300]
-                                                      : (isDark
-                                                          ? Colors.white24
-                                                          : Colors.grey.shade300)),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              )
-                            else
-                              _buildMissingImagePlaceholder(isDark),
-                            const SizedBox(height: 16),
-
-                            // Only show prediction info if NOT pre-prediction mode
-                            if (!widget.isPrePrediction &&
-                                topPrediction != null) ...[
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: (isDark ? Colors.white : Colors.black)
-                                      .withValues(alpha: 0.05),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      'AI Prediction',
-                                      style: TextStyle(
-                                        color:
-                                            isDark
-                                                ? Colors.white70
-                                                : Colors.grey[700],
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      topPrediction['label'] ?? 'Unknown',
-                                      style: TextStyle(
-                                        color:
-                                            isDark
-                                                ? Colors.white
-                                                : Colors.black,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Confidence: ${((topPrediction['confidence'] ?? 0) * 100).toStringAsFixed(1)}%',
-                                      style: TextStyle(
-                                        color:
-                                            isDark
-                                                ? Colors.blue[200]
-                                                : Colors.blue[700],
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    if (widget.imageCount != null &&
-                                        widget.imageCount! > 1) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Based on ${widget.imageCount} images',
-                                        style: TextStyle(
-                                          color:
-                                              isDark
-                                                  ? Colors.white60
-                                                  : Colors.grey[600],
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ] else if (widget.isPrePrediction) ...[
-                              // Show "Ready for prediction" message
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: Colors.blue.withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.psychology,
-                                      color: Colors.blue[600],
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Ready for AI Prediction',
-                                      style: TextStyle(
-                                        color: Colors.blue[700],
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // 4. Symptoms Card
-                      if (widget.symptoms.isNotEmpty)
+                        // 2. Main Details Card
                         _buildGlassCard(
                           isDark: isDark,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                'Reported Symptoms',
-                                style: TextStyle(
-                                  color: isDark ? Colors.white : Colors.black,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Case ID',
+                                    style: TextStyle(
+                                      color:
+                                          isDark
+                                              ? Colors.white54
+                                              : Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    widget.caseId,
+                                    style: TextStyle(
+                                      color:
+                                          isDark ? Colors.white : Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 12),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children:
-                                    widget.symptoms
-                                        .map(
-                                          (s) => Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 6,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  isDark
-                                                      ? Colors.blue.withValues(alpha: 
-                                                        0.2,
-                                                      )
-                                                      : Colors.blue.withValues(alpha: 
-                                                        0.1,
-                                                      ),
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                              border: Border.all(
-                                                color: Colors.blue.withValues(alpha: 
-                                                  0.3,
-                                                ),
-                                              ),
-                                            ),
-                                            child: Text(
-                                              s,
-                                              style: TextStyle(
-                                                color:
-                                                    isDark
-                                                        ? Colors.blue[100]
-                                                        : Colors.blue[800],
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildDetailItem(
+                                      isDark,
+                                      'Created at',
+                                      createdAtText,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _buildDetailItem(
+                                      isDark,
+                                      'Last updated',
+                                      updatedAtText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 24),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildDetailItem(
+                                      isDark,
+                                      'Gender',
+                                      widget.gender ?? '-',
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _buildDetailItem(
+                                      isDark,
+                                      'Age',
+                                      widget.age ?? '-',
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _buildDetailItem(
+                                      isDark,
+                                      'Location',
+                                      widget.location ?? '-',
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
+                        const SizedBox(height: 16),
 
-                      const SizedBox(height: 30),
-                    ],
+                        // 3. Image Card
+                        _buildGlassCard(
+                          isDark: isDark,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Diagnostic Image',
+                                    style: TextStyle(
+                                      color:
+                                          isDark ? Colors.white : Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  if (diagnosticPaths.length > 1)
+                                    Text(
+                                      '${diagnosticPaths.length} images',
+                                      style: TextStyle(
+                                        color:
+                                            isDark
+                                                ? Colors.white60
+                                                : Colors.grey[600],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Swipeable image carousel
+                              if (diagnosticPaths.isNotEmpty)
+                                Column(
+                                  children: [
+                                    SizedBox(
+                                      height: 220,
+                                      child: Stack(
+                                        children: [
+                                          PageView.builder(
+                                            controller: _imagePageController,
+                                            itemCount: diagnosticPaths.length,
+                                            onPageChanged: (index) {
+                                              setState(
+                                                () =>
+                                                    _currentImageIndex = index,
+                                              );
+                                            },
+                                            itemBuilder: (context, index) {
+                                              // Show badge on currently viewed image (will be used for prediction)
+                                              final isSelectedForPrediction =
+                                                  index == _currentImageIndex;
+                                              return Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                    ),
+                                                child: Stack(
+                                                  children: [
+                                                    ClipRRect(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                      child: _buildDiagnosticImage(
+                                                        diagnosticPaths[index],
+                                                        isDark,
+                                                      ),
+                                                    ),
+                                                    // "Selected for Prediction" badge
+                                                    if (isSelectedForPrediction)
+                                                      Positioned(
+                                                        bottom: 12,
+                                                        left: 0,
+                                                        right: 0,
+                                                        child: Center(
+                                                          child: ClipRRect(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  16,
+                                                                ),
+                                                            child: BackdropFilter(
+                                                              filter:
+                                                                  ImageFilter.blur(
+                                                                    sigmaX: 8,
+                                                                    sigmaY: 8,
+                                                                  ),
+                                                              child: Container(
+                                                                padding:
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          12,
+                                                                      vertical:
+                                                                          6,
+                                                                    ),
+                                                                decoration: BoxDecoration(
+                                                                  color: Colors
+                                                                      .blue
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            0.7,
+                                                                      ),
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        16,
+                                                                      ),
+                                                                  border: Border.all(
+                                                                    color: Colors
+                                                                        .white
+                                                                        .withValues(
+                                                                          alpha:
+                                                                              0.3,
+                                                                        ),
+                                                                    width: 1,
+                                                                  ),
+                                                                ),
+                                                                child: const Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    Icon(
+                                                                      Icons
+                                                                          .check_circle,
+                                                                      color:
+                                                                          Colors
+                                                                              .white,
+                                                                      size: 14,
+                                                                    ),
+                                                                    SizedBox(
+                                                                      width: 6,
+                                                                    ),
+                                                                    Text(
+                                                                      'Selected for Prediction',
+                                                                      style: TextStyle(
+                                                                        color:
+                                                                            Colors.white,
+                                                                        fontSize:
+                                                                            11,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                          // Image counter overlay (only for multiple images)
+                                          if (diagnosticPaths.length > 1)
+                                            Positioned(
+                                              top: 12,
+                                              right: 12,
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                child: BackdropFilter(
+                                                  filter: ImageFilter.blur(
+                                                    sigmaX: 8,
+                                                    sigmaY: 8,
+                                                  ),
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 6,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            16,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      '${_currentImageIndex + 1} / ${diagnosticPaths.length}',
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    // Page indicator dots (only for multiple images)
+                                    if (diagnosticPaths.length > 1) ...[
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: List.generate(
+                                          diagnosticPaths.length,
+                                          (index) {
+                                            final isActive =
+                                                index == _currentImageIndex;
+                                            // The current image is the one that will be used for prediction
+                                            final isPredictIndex =
+                                                index == _currentImageIndex;
+                                            return AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 200,
+                                              ),
+                                              margin:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 3,
+                                                  ),
+                                              width: isActive ? 20 : 6,
+                                              height: 6,
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(3),
+                                                color:
+                                                    isActive
+                                                        ? (isPredictIndex
+                                                            ? Colors.green[500]
+                                                            : (isDark
+                                                                ? Colors
+                                                                    .blue[400]
+                                                                : Colors
+                                                                    .blue[600]))
+                                                        : (isPredictIndex
+                                                            ? Colors.green[300]
+                                                            : (isDark
+                                                                ? Colors.white24
+                                                                : Colors
+                                                                    .grey
+                                                                    .shade300)),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                )
+                              else
+                                _buildMissingImagePlaceholder(isDark),
+                              const SizedBox(height: 16),
+
+                              // Only show prediction info if NOT pre-prediction mode
+                              if (!widget.isPrePrediction &&
+                                  topPrediction != null) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: (isDark
+                                            ? Colors.white
+                                            : Colors.black)
+                                        .withValues(alpha: 0.05),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        'AI Prediction',
+                                        style: TextStyle(
+                                          color:
+                                              isDark
+                                                  ? Colors.white70
+                                                  : Colors.grey[700],
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        topPrediction['label'] ?? 'Unknown',
+                                        style: TextStyle(
+                                          color:
+                                              isDark
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Confidence: ${((topPrediction['confidence'] ?? 0) * 100).toStringAsFixed(1)}%',
+                                        style: TextStyle(
+                                          color:
+                                              isDark
+                                                  ? Colors.blue[200]
+                                                  : Colors.blue[700],
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      if (widget.imageCount != null &&
+                                          widget.imageCount! > 1) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Based on ${widget.imageCount} images',
+                                          style: TextStyle(
+                                            color:
+                                                isDark
+                                                    ? Colors.white60
+                                                    : Colors.grey[600],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ] else if (widget.isPrePrediction) ...[
+                                // Show "Ready for prediction" message
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Colors.blue.withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.psychology,
+                                        color: Colors.blue[600],
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Ready for AI Prediction',
+                                        style: TextStyle(
+                                          color: Colors.blue[700],
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 4. Symptoms Card
+                        if (widget.symptoms.isNotEmpty)
+                          _buildGlassCard(
+                            isDark: isDark,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Reported Symptoms',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children:
+                                      widget.symptoms
+                                          .map(
+                                            (s) => Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 6,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    isDark
+                                                        ? Colors.blue
+                                                            .withValues(
+                                                              alpha: 0.2,
+                                                            )
+                                                        : Colors.blue
+                                                            .withValues(
+                                                              alpha: 0.1,
+                                                            ),
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                                border: Border.all(
+                                                  color: Colors.blue.withValues(
+                                                    alpha: 0.3,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                s,
+                                                style: TextStyle(
+                                                  color:
+                                                      isDark
+                                                          ? Colors.blue[100]
+                                                          : Colors.blue[800],
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        const SizedBox(height: 30),
+                      ],
+                    ),
                   ),
                 ),
-              ),
 
-              // Bottom buttons
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.black.withValues(alpha: 0.5) : Colors.white,
-                  border: Border(top: BorderSide(color: Colors.grey.shade300)),
+                // Bottom buttons
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  decoration: BoxDecoration(
+                    color:
+                        isDark
+                            ? Colors.black.withValues(alpha: 0.5)
+                            : Colors.white,
+                    border: Border(
+                      top: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  child:
+                      widget.isPrePrediction
+                          ? _buildPrePredictionButtons(isDark)
+                          : _buildPostPredictionButton(isDark),
                 ),
-                child:
-                    widget.isPrePrediction
-                        ? _buildPrePredictionButtons(isDark)
-                        : _buildPostPredictionButton(isDark),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

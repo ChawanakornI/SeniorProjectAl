@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'api_config.dart';
 
 /// Photo preview screen for confirming saved photos with swipeable carousel.
 /// Does NOT show predictions - predictions are shown after Case Summary.
@@ -42,6 +43,70 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
     super.dispose();
   }
 
+  bool _isNetworkPath(String path) {
+    final lower = path.toLowerCase();
+    return lower.startsWith('http://') || lower.startsWith('https://');
+  }
+
+  bool _isBackendRelativePath(String path) {
+    if (path.isEmpty) return false;
+    if (_isNetworkPath(path)) return false;
+    if (path.startsWith('/')) return false;
+    return path.contains('/') && !path.contains('\\');
+  }
+
+  String _resolveImagePath(String path) {
+    final trimmed = path.trim();
+    if (_isBackendRelativePath(trimmed)) {
+      return '${ApiConfig.baseUrl}/images/$trimmed';
+    }
+    return trimmed;
+  }
+
+  Widget _buildImagePlaceholder(bool isDark) {
+    return Container(
+      color: isDark ? const Color(0xFF2C2C2E) : Colors.grey.shade200,
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.broken_image_outlined,
+        color: isDark ? Colors.white54 : Colors.grey.shade500,
+        size: 36,
+      ),
+    );
+  }
+
+  Widget _buildPreviewImage(String path, bool isDark) {
+    final resolvedPath = _resolveImagePath(path);
+    final placeholder = _buildImagePlaceholder(isDark);
+
+    if (resolvedPath.isEmpty) return placeholder;
+
+    if (_isNetworkPath(resolvedPath)) {
+      return Image.network(
+        resolvedPath,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            color: isDark ? const Color(0xFF2C2C2E) : Colors.grey.shade100,
+            alignment: Alignment.center,
+            child: const CircularProgressIndicator(strokeWidth: 2),
+          );
+        },
+        errorBuilder: (_, __, ___) => placeholder,
+      );
+    }
+
+    final file = File(resolvedPath);
+    if (!file.existsSync()) return placeholder;
+
+    return Image.file(
+      file,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => placeholder,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -60,7 +125,7 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
                 child:
                     hasMultipleImages
                         ? _buildImageCarousel(isDark)
-                        : _buildSingleImage(),
+                        : _buildSingleImage(isDark),
               ),
 
               const SizedBox(height: 12),
@@ -169,11 +234,9 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     // Return true to indicate save confirmed
-                    Navigator.of(context).pop(
-                      {
-                      'confirmed':true,
-                      'predictionIndex': _currentPage,
-                      });
+                    Navigator.of(
+                      context,
+                    ).pop({'confirmed': true, 'predictionIndex': _currentPage});
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF007AFF),
@@ -218,15 +281,12 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
   }
 
   /// Single image preview (original behavior)
-  Widget _buildSingleImage() {
+  Widget _buildSingleImage(bool isDark) {
+    final singlePath = _allImages.isNotEmpty ? _allImages.first : '';
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        image: DecorationImage(
-          image: FileImage(File(widget.imagePath)),
-          fit: BoxFit.cover,
-        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -234,6 +294,10 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
             offset: const Offset(0, 5),
           ),
         ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: _buildPreviewImage(singlePath, isDark),
       ),
     );
   }
@@ -254,10 +318,6 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
-                  image: DecorationImage(
-                    image: FileImage(File(_allImages[index])),
-                    fit: BoxFit.cover,
-                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.25),
@@ -265,6 +325,10 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
                       offset: const Offset(0, 8),
                     ),
                   ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: _buildPreviewImage(_allImages[index], isDark),
                 ),
               ),
             );
@@ -303,26 +367,33 @@ class _PhotoPreviewScreenState extends State<PhotoPreviewScreen> {
           bottom: 16,
           left: 0,
           right: 0,
-            child: Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'selected for prediction',
-                      style: TextStyle(color: Color(0xFFF0EAD6), fontWeight: FontWeight.bold, fontSize: 12),
+          child: Center(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'selected for prediction',
+                    style: TextStyle(
+                      color: Color(0xFFF0EAD6),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
                     ),
                   ),
-                  ),
+                ),
               ),
             ),
-        )
+          ),
+        ),
       ],
     );
   }

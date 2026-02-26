@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 import 'api_config.dart';
 import 'camera_screen.dart';
-//asdas
+
 class AddPhotoDialog extends StatefulWidget {
   const AddPhotoDialog({
     super.key,
@@ -56,16 +56,60 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
   void _removeImage(int index) {
     setState(() {
       _selectedImages.removeAt(index);
+      if (_selectedImages.isEmpty) {
+        _predictIndex = 0;
+      } else if (_predictIndex >= _selectedImages.length) {
+        _predictIndex = _selectedImages.length - 1;
+      }
+    });
+  }
+
+  Future<void> _handleCameraResult(dynamic result) async {
+    if (result == null) return;
+
+    List<String> paths = const [];
+    int? predictIndex;
+
+    if (result is Map) {
+      final rawImages = result['images'];
+      if (rawImages is List) {
+        paths = rawImages.whereType<String>().toList();
+      }
+      final dynamic rawIndex =
+          result['predictionIndex'] ?? result['predictIndex'];
+      if (rawIndex is int) {
+        predictIndex = rawIndex;
+      }
+    } else if (result is List) {
+      paths = result.whereType<String>().toList();
+    } else if (result is String) {
+      paths = [result];
+    }
+
+    if (paths.isEmpty) return;
+
+    for (final path in paths) {
+      // CameraScreen already crops and validates blur with backend.
+      await _validateAndAddImage(path);
+      if (_selectedImages.length >= _maxImages) break;
+    }
+
+    if (!mounted || predictIndex == null || _selectedImages.isEmpty) return;
+    final clamped = predictIndex.clamp(0, _selectedImages.length - 1);
+    setState(() {
+      _predictIndex = clamped;
     });
   }
 
   // ตรวจสอบความเบลอเบื้องต้นและเพิ่มรูป
+  // Camera images are already cropped to square in CameraScreen.
   Future<void> _validateAndAddImage(String path) async {
     final isBlurry = await _isImageBlurry(path);
     if (isBlurry) {
       _showBlurDialog();
       return;
     }
+    debugPrint('[addPhoto] adding image: $path');
     _addImage(path);
   }
 
@@ -261,18 +305,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                       builder: (context) => CameraScreen(caseId: widget.caseId),
                     ),
                   );
-                  if (result != null) {
-                    if (result is List<String>) {
-                      // Handle multiple images from camera
-                      for (final path in result) {
-                        await _validateAndAddImage(path);
-                        if (_selectedImages.length >= _maxImages) break;
-                      }
-                    } else if (result is String) {
-                      // Handle single image (backward compatibility)
-                      await _validateAndAddImage(result);
-                    }
-                  }
+                  await _handleCameraResult(result);
 
                   //// this is for single image
                   // if (result != null){
@@ -343,149 +376,156 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
       isConfirmAction: true,
       onConfirm: () {
         // ส่ง List รูปภาพกลับไปหน้าหลัก
-        Navigator.of(context).pop({
-          'images': _selectedImages,
-          'predictIndex': _predictIndex,
-      });
+        Navigator.of(
+          context,
+        ).pop({'images': _selectedImages, 'predictIndex': _predictIndex});
       },
     );
   }
 
   // --- NEW: ฟังก์ชันสร้าง Dialog Pop-up (ตามดีไซน์) ---
   void _showConfirmationDialog({
-  required IconData icon,
-  required String title,
-  required String subtitle,
-  required String confirmText,
-  required VoidCallback onConfirm,
-  bool isConfirmAction = true,
-}) {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    barrierColor: Colors.transparent, // สำคัญ
-    builder: (BuildContext dialogContext) {
-      final isDark =
-          Theme.of(dialogContext).brightness == Brightness.dark;
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String confirmText,
+    required VoidCallback onConfirm,
+    bool isConfirmAction = true,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.transparent, // สำคัญ
+      builder: (BuildContext dialogContext) {
+        final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
 
-      return Stack(
-        children: [
-          // 🔹 BLUR + OVERLAY BACKGROUND
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-            child: Container(
-              color: const Color.fromARGB(255, 223, 223, 223)
-                  .withValues(alpha: isDark ? 0.15 : 0.25),
-            ),
-          ),
-
-          // 🔹 DIALOG CONTENT
-          Center(
-            child: Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+        return Stack(
+          children: [
+            // 🔹 BLUR + OVERLAY BACKGROUND
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(
+                color: const Color.fromARGB(
+                  255,
+                  223,
+                  223,
+                  223,
+                ).withValues(alpha: isDark ? 0.15 : 0.25),
               ),
-              elevation: 0,
-              backgroundColor:
-                  isDark ? const Color(0xFF282828) : const Color(0xFFFBFBFB),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      icon,
-                      size: 48,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                    const SizedBox(height: 16),
+            ),
 
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black,
+            // 🔹 DIALOG CONTENT
+            Center(
+              child: Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                elevation: 0,
+                backgroundColor:
+                    isDark ? const Color(0xFF282828) : const Color(0xFFFBFBFB),
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 48,
+                        color: isDark ? Colors.white : Colors.black87,
                       ),
-                    ),
+                      const SizedBox(height: 16),
 
-                    const SizedBox(height: 8),
-
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color:
-                            isDark ? Colors.white70 : Colors.grey.shade600,
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 8),
 
-                    Row(
-                      children: [
-                        // Cancel
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.of(dialogContext).pop();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  isDark ? const Color(0xFF1F1F1F) : Colors.black,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.white70 : Colors.grey.shade600,
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      Row(
+                        children: [
+                          // Cancel
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(dialogContext).pop();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor:
+                                    isDark
+                                        ? const Color(0xFF1F1F1F)
+                                        : Colors.black,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                elevation: 0,
                               ),
-                              elevation: 0,
-                            ),
-                            child: const Text(
-                              "Cancel",
-                              style: TextStyle(fontWeight: FontWeight.w600),
+                              child: const Text(
+                                "Cancel",
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
                             ),
                           ),
-                        ),
 
-                        const SizedBox(width: 12),
+                          const SizedBox(width: 12),
 
-                        // Confirm
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.of(dialogContext).pop();
-                              onConfirm();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                          // Confirm
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(dialogContext).pop();
+                                onConfirm();
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                elevation: 0,
                               ),
-                              elevation: 0,
-                            ),
-                            child: Text(
-                              confirmText,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
+                              child: Text(
+                                confirmText,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-      );
-    },
-  );
-}
-
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -495,7 +535,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
         widget.subtitle ?? 'Upload lesion photos to predict the result';
 
     return Dialog(
-      backgroundColor: Colors.transparent, 
+      backgroundColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
         constraints: const BoxConstraints(maxHeight: 500),
@@ -571,58 +611,65 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                   // ---------- Image Area ----------
                   Expanded(
                     child:
-                        _selectedImages.isEmpty ? _buildEmptyState() : _buildImageGrid(isDark),
-                        // _buildImageGrid(isDark),
+                        _selectedImages.isEmpty
+                            ? _buildEmptyState()
+                            : _buildImageGrid(isDark),
+                    // _buildImageGrid(isDark),
                   ),
 
                   const SizedBox(height: 20),
 
                   // ---------- Buttons ----------
                   Row(
-  children: [
-    Expanded(
-      child: OutlinedButton(
-        onPressed: _handleCancel,
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(
-            color: isDark ? Colors.white24 : Colors.grey.shade300,
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          foregroundColor: isDark ? Colors.white70 : Colors.grey,
-        ),
-        child: const Text(
-          'Cancel',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ),
-    ),
-    const SizedBox(width: 12),
-    Expanded(
-      child: ElevatedButton(
-        onPressed: _selectedImages.isEmpty ? null : _handleSave,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _selectedImages.isNotEmpty
-              ? Colors.black
-              : Colors.grey.shade300,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        child: const Text(
-          'Save',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ),
-    ),
-  ],
-),
-
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _handleCancel,
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color:
+                                  isDark
+                                      ? Colors.white24
+                                      : Colors.grey.shade300,
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            foregroundColor:
+                                isDark ? Colors.white70 : Colors.grey,
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed:
+                              _selectedImages.isEmpty ? null : _handleSave,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                _selectedImages.isNotEmpty
+                                    ? Colors.black
+                                    : Colors.grey.shade300,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Save',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -637,9 +684,10 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.1)
-                        : Colors.black.withValues(alpha: 0.05),
+                    color:
+                        isDark
+                            ? Colors.white.withValues(alpha: 0.1)
+                            : Colors.black.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
@@ -658,50 +706,45 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
 
   // Widget 1: แสดงตอนยังไม่มีรูป
   Widget _buildEmptyState() {
-  final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-  return Align(
-    alignment: Alignment.center,
-    child: GestureDetector(
-      onTap: () => _showImageSourceActionSheet(context),
-      child: Container(
-        height: 200,
-        width: 200,
-        decoration: BoxDecoration(
-          color: isDark
-              ? Color(0xFF282828)
-              : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark
-                ? Colors.white24
-                : Colors.grey.shade300,
+    return Align(
+      alignment: Alignment.center,
+      child: GestureDetector(
+        onTap: () => _showImageSourceActionSheet(context),
+        child: Container(
+          height: 200,
+          width: 200,
+          decoration: BoxDecoration(
+            color: isDark ? Color(0xFF282828) : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.white24 : Colors.grey.shade300,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.add_a_photo_outlined,
+                size: 48,
+                color: isDark ? Colors.white54 : Colors.grey.shade400,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Tap to take photo\nor select from gallery',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white60 : Colors.grey.shade500,
+                ),
+              ),
+            ],
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.add_a_photo_outlined,
-              size: 48,
-              color: isDark ? Colors.white54 : Colors.grey.shade400,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Tap to take photo\nor select from gallery',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white60 : Colors.grey.shade500,
-              ),
-            ),
-          ],
-        ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   // Widget 2: แสดงตอนมีรูปแล้ว (Grid)
   Widget _buildImageGrid(bool isDark) {
@@ -721,8 +764,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
             onTap: () => _showImageSourceActionSheet(context),
             child: Container(
               decoration: BoxDecoration(
-                color: isDark? Color(0xFF282828)
-                :Colors.grey.shade50,
+                color: isDark ? Color(0xFF282828) : Colors.grey.shade50,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.grey.shade300),
               ),
@@ -737,9 +779,7 @@ class _AddPhotoDialogState extends State<AddPhotoDialog> {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: SizedBox.expand(
-                child: _buildThumbnail(imagePath, isDark),
-              ),
+              child: SizedBox.expand(child: _buildThumbnail(imagePath, isDark)),
             ),
             Positioned(
               top: -8,

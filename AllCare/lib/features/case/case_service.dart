@@ -240,10 +240,22 @@ class CaseService {
 
       if (response.statusCode != 200) {
         log(
-          'Failed to release case ID: ${response.statusCode}',
+          'Failed to release case ID: ${response.statusCode} ${response.body}',
           name: 'CaseService',
         );
         throw Exception('Failed to release case ID: ${response.statusCode}');
+      }
+
+      final body = jsonDecode(response.body);
+      final status = body['status'] as String? ?? '';
+      if (status == 'skipped') {
+        final reason = body['reason'] as String? ?? 'unknown';
+        log(
+          'Release case ID $caseId skipped: $reason',
+          name: 'CaseService',
+        );
+      } else {
+        log('Released case ID $caseId successfully', name: 'CaseService');
       }
     } on SocketException catch (e) {
       log('Network error: $e', name: 'CaseService');

@@ -262,11 +262,32 @@ def _read_user_case_counter(user_id: str) -> Optional[int]:
         return None
 
 
-def _write_user_case_counter(user_id: str, last_id: int) -> None:
-    """Write the case counter for a specific user."""
+def _read_released_ids(user_id: str) -> List[int]:
+    """Read the pool of released (recyclable) case IDs for a user."""
+    counter_path = _user_counter_path(user_id)
+    if not counter_path.exists():
+        return []
+    try:
+        data = json.loads(counter_path.read_text(encoding="utf-8"))
+        pool = data.get("released_ids", [])
+        return sorted(int(i) for i in pool if str(i).isdigit())
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return []
+
+
+def _write_user_case_counter(user_id: str, last_id: int, released_ids: Optional[List[int]] = None) -> None:
+    """Write the case counter and released IDs pool for a specific user.
+    Pass released_ids explicitly to update the pool; None preserves existing pool."""
     counter_path = _user_counter_path(user_id)
     counter_path.parent.mkdir(parents=True, exist_ok=True)
-    counter_path.write_text(json.dumps({"last_case_id": last_id}), encoding="utf-8")
+    data: Dict[str, Any] = {"last_case_id": last_id}
+    if released_ids is not None:
+        data["released_ids"] = sorted(released_ids)
+    else:
+        existing = _read_released_ids(user_id) if counter_path.exists() else []
+        if existing:
+            data["released_ids"] = existing
+    counter_path.write_text(json.dumps(data), encoding="utf-8")
 
 
 def _max_case_id_from_user_metadata(user_id: str) -> Optional[int]:
@@ -288,11 +309,20 @@ def _max_case_id_from_user_metadata(user_id: str) -> Optional[int]:
 
 
 def _next_case_id_for_user(user_id: str) -> str:
-    """Generate the next case ID for a specific user. Starts from 10001."""
+    """Generate the next case ID for a specific user. Starts from 10001.
+    Reuses released IDs before incrementing the counter."""
     with _CASE_ID_LOCK:
+        released = _read_released_ids(user_id)
+        if released:
+            recycled_id = released.pop(0)
+            last_id = _read_user_case_counter(user_id)
+            if last_id is None:
+                last_id = _max_case_id_from_user_metadata(user_id) or (config.CASE_ID_START - 1)
+            _write_user_case_counter(user_id, last_id, released_ids=released)
+            return str(recycled_id)
+
         last_id = _read_user_case_counter(user_id)
         if last_id is None:
-            # Check existing metadata for this user to find max case_id
             last_id = _max_case_id_from_user_metadata(user_id) or (config.CASE_ID_START - 1)
         next_id = max(last_id + 1, config.CASE_ID_START)
         _write_user_case_counter(user_id, next_id)
@@ -527,25 +557,30 @@ async def release_case_id(
         raise HTTPException(status_code=400, detail="Invalid case_id")
 
     user_id = user_context["user_id"]
+    case_id_int = int(case_id)
 
     with _CASE_ID_LOCK:
         last_id = _read_user_case_counter(user_id)
         if last_id is None:
             return {"status": "skipped", "reason": "missing_counter"}
-        if str(last_id) != case_id:
-            return {
-                "status": "skipped",
-                "reason": "counter_mismatch",
-                "last_case_id": str(last_id),
-            }
-        # Check if case_id has entries in user's metadata
+
+        if case_id_int < config.CASE_ID_START or case_id_int > last_id:
+            return {"status": "skipped", "reason": "out_of_range"}
+
         metadata_path = _user_metadata_path(user_id)
         entries = _read_metadata_entries(metadata_path)
         case_in_use = any(entry.get("case_id") == case_id for entry in entries)
         if case_in_use:
             return {"status": "skipped", "reason": "case_in_use"}
-        next_last_id = max(last_id - 1, config.CASE_ID_START - 1)
-        _write_user_case_counter(user_id, next_last_id)
+
+        if str(last_id) == case_id:
+            next_last_id = max(last_id - 1, config.CASE_ID_START - 1)
+            _write_user_case_counter(user_id, next_last_id)
+        else:
+            released = _read_released_ids(user_id)
+            if case_id_int not in released:
+                released.append(case_id_int)
+            _write_user_case_counter(user_id, last_id, released_ids=released)
 
     return {"status": "ok", "case_id": case_id}
 
